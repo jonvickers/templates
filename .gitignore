@@ -1,6 +1,9 @@
 # Apple Linux File Stuff
 .DS_Store
 
+# Windows
+Thumbs.db
+
 # Logs
 logs
 *.log
