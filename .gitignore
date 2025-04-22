@@ -122,7 +122,11 @@ dump.rdb
 # ────────────────────────────────────────────────────────────────────────────
 # IDE & Editor
 # ────────────────────────────────────────────────────────────────────────────
-.vscode/
+# Ignore all vscode files except settings, extensions, and launch configs
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 .idea/
 *.code-workspace
 *.sublime-project
