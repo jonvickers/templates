@@ -119,6 +119,12 @@ npm install -g pnpm yarn
 
 > **Note:** pnpm can also be installed standalone via `brew install pnpm` if you prefer not to use npm for it.
 
+> **corepack** is bundled with Node.js and can manage pnpm/yarn versions per-project via `packageManager` in `package.json`. Enable it with:
+> ```bash
+> corepack enable
+> ```
+> Projects using corepack will automatically use the correct package manager version without global installs.
+
 **Verify:**
 ```bash
 pnpm --version
@@ -153,7 +159,39 @@ gh --version
 gh auth status
 ```
 
-### 9. CLI Utilities
+### 9. SSH Keys
+
+Set up SSH for GitHub, Azure DevOps, and remote server access. macOS includes `ssh-agent` and integrates with Keychain automatically.
+
+**Generate a key and add it:**
+```bash
+ssh-keygen -t ed25519 -C "you@example.com"
+ssh-add --apple-use-keychain ~/.ssh/id_ed25519
+```
+
+**Persist across reboots** by adding to `~/.ssh/config`:
+```
+Host *
+  AddKeysToAgent yes
+  UseKeychain yes
+  IdentityFile ~/.ssh/id_ed25519
+```
+
+**Add your public key to GitHub:**
+```bash
+# Copy public key to clipboard
+pbcopy < ~/.ssh/id_ed25519.pub
+
+# Or use GitHub CLI to add it directly
+gh ssh-key add ~/.ssh/id_ed25519.pub --title "Mac Dev Machine"
+```
+
+**Verify:**
+```bash
+ssh -T git@github.com
+```
+
+### 10. CLI Utilities
 
 ```bash
 brew install ripgrep jq fd tree wget htop watchman
@@ -177,7 +215,7 @@ fd --version
 watchman --version
 ```
 
-### 10. Docker Desktop
+### 11. Docker Desktop
 
 ```bash
 brew install --cask docker
@@ -196,7 +234,7 @@ docker --version
 docker ps  # Fails if Docker Desktop isn't running
 ```
 
-### 11. Cloud CLIs
+### 12. Cloud CLIs
 
 **Azure CLI:**
 ```bash
@@ -229,7 +267,7 @@ az --version
 gcloud --version
 ```
 
-### 12. Claude Code (AI-assisted development)
+### 13. Claude Code (AI-assisted development)
 
 ```bash
 npm install -g @anthropic-ai/claude-code
@@ -313,7 +351,13 @@ fnm install --lts
 fnm default lts-latest
 
 # ── Global npm packages ──
+corepack enable
 npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code
+
+# ── SSH key (interactive) ──
+# ssh-keygen -t ed25519 -C "you@example.com"
+# ssh-add --apple-use-keychain ~/.ssh/id_ed25519
+# gh ssh-key add ~/.ssh/id_ed25519.pub --title "Mac Dev Machine"
 ```
 
 ## Verified Versions (as of February 2026)
@@ -322,19 +366,23 @@ These versions are known to work well together:
 
 | Tool | Version | Notes |
 |------|---------|-------|
+| Git | 2.53.0 | - |
 | Node.js | 24.13.0 | Latest LTS (Krypton) |
-| npm | 11.x | Included with Node.js 24 |
-| fnm | 1.38.x | - |
-| pnpm | 10.x | - |
-| Yarn | 1.22.x | Classic; Yarn 4.x available via `corepack` |
-| Prettier | 3.8.x | - |
-| ESLint | 10.x | Flat config is the default |
-| TypeScript | 5.9.x | - |
-| GitHub CLI | 2.86.0+ | - |
-| Azure CLI | 2.83.0+ | - |
+| npm | 11.6.2 | Included with Node.js 24 |
+| fnm | 1.38.1 | - |
+| pnpm | 10.29.1 | - |
+| Yarn | 1.22.22 | Classic; Yarn 4.x available via `corepack` |
+| Prettier | 3.8.1 | - |
+| ESLint | 10.0.0 | Flat config is the default |
+| TypeScript | 5.9.3 | - |
+| GitHub CLI | 2.86.0 | - |
+| Azure CLI | 2.83.0 | - |
 | Google Cloud SDK | 555.0.0+ | - |
 | Docker | 29.x | - |
-| VS Code | 1.98+ | - |
+| VS Code | 1.108.0 | - |
+| ripgrep | 14.1.1 | - |
+| jq | 1.8.1 | - |
+| fd | 10.3.0 | - |
 | Homebrew | 5.0.x | - |
 
 ## Optional but Recommended
@@ -406,6 +454,7 @@ commands=(
     "fd:fd"
     "tree:tree"
     "watchman:watchman"
+    "ssh:OpenSSH"
     "code:VS Code"
 )
 
@@ -427,12 +476,13 @@ After installing all tools, verify these key items:
 - [ ] **Node.js**: `node --version` shows v24.x or later
 - [ ] **fnm configured**: New terminal sessions auto-detect `.nvmrc` / `.node-version` files
 - [ ] **VS Code**: Opens from terminal with `code .`
+- [ ] **Git configured**: `git config --global user.name` and `git config --global user.email` are set
+- [ ] **SSH key added**: `ssh -T git@github.com` authenticates successfully
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
 - [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
 - [ ] **Azure authenticated**: `az account show` shows your subscription
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account
-- [ ] **Git configured**: `git config --global user.name` and `git config --global user.email` are set
 
 ## Troubleshooting
 
