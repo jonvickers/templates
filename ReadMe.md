@@ -6,3 +6,8 @@ Quick reference links to all templates in this repo.
 
 - [Node.js Dev Tools - macOS](nodejs-dev-tools-macOS.md)
 - [Node.js Dev Tools - PC (Windows)](nodejs-dev-tools-PC.md)
+
+## Project Boilerplate Files
+
+- [.gitignore](.gitignore)
+- [.env.example](.env.example)
