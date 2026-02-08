@@ -1,6 +1,6 @@
-# Node.js Development Station Setup Guide
+# Node.js Development Station Setup Guide (macOS)
 
-Complete guide for setting up a macOS development environment for Node.js development.
+Complete guide for setting up a macOS development environment for Node.js and Next.js development.
 
 ## Prerequisites
 
@@ -22,41 +22,63 @@ Before starting, ensure you have:
 
 Follow this sequence to avoid dependency issues:
 
-### 1. Core System Tools
+### 1. Terminal (optional upgrade)
+
+The built-in Terminal.app works fine. Popular upgrades:
+
+- **iTerm2**: `brew install --cask iterm2`
+- **Warp**: `brew install --cask warp`
+
+### 2. Git
 
 ```bash
-# Version control
 brew install git
+```
 
-# Essential utilities
-brew install ripgrep jq tree fd wget
-
-# System monitoring
-brew install htop
+**Configure:**
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+git config --global init.defaultBranch main
 ```
 
 **Verify:**
 ```bash
 git --version
-rg --version
-jq --version
 ```
 
-### 2. Node.js Version Manager
+### 3. VS Code
+
+The standard editor for Node.js and Next.js development:
 
 ```bash
-# Install nvm
-brew install nvm
-
-# Create nvm directory
-mkdir ~/.nvm
+brew install --cask visual-studio-code
 ```
 
-**Configure nvm** - Add to `~/.zshrc` (or `~/.bashrc` if using bash):
+**Recommended extensions** (install from VS Code or CLI):
 ```bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+code --install-extension dbaeumer.vscode-eslint
+code --install-extension esbenp.prettier-vscode
+code --install-extension bradlc.vscode-tailwindcss
+code --install-extension Prisma.prisma
+code --install-extension eamodio.gitlens
+code --install-extension ms-azuretools.vscode-docker
+code --install-extension humao.rest-client
+```
+
+### 4. Node.js Version Manager (fnm)
+
+We use **fnm** (Fast Node Manager) -- a cross-platform, Rust-based version manager that is fast, simple, and works with `.nvmrc` and `.node-version` files:
+
+```bash
+brew install fnm
+```
+
+**Configure your shell** so fnm activates in every terminal session. Add this line to `~/.zshrc` (or `~/.bashrc` if using bash):
+
+```bash
+# Add to ~/.zshrc:
+eval "$(fnm env --use-on-cd --shell zsh)"
 ```
 
 **Reload shell:**
@@ -66,17 +88,20 @@ source ~/.zshrc
 
 **Verify:**
 ```bash
-nvm --version
+fnm --version
 ```
 
-### 3. Node.js
+### 5. Node.js
 
 ```bash
 # Install latest LTS version
-nvm install --lts
+fnm install --lts
 
-# Set as default
-nvm alias default lts/*
+# Use it (fnm auto-switches if --use-on-cd is configured)
+fnm use lts-latest
+
+# Set as your default
+fnm default lts-latest
 
 # Verify
 node --version
@@ -84,19 +109,23 @@ npm --version
 npx --version
 ```
 
-### 4. Alternative Package Managers
+### 6. Package Managers
+
+**pnpm** is the recommended package manager for Next.js projects (fast, disk-efficient, strict). Install it alongside yarn for compatibility with other projects:
 
 ```bash
-npm install -g yarn pnpm
+npm install -g pnpm yarn
 ```
+
+> **Note:** pnpm can also be installed standalone via `brew install pnpm` if you prefer not to use npm for it.
 
 **Verify:**
 ```bash
-yarn --version
 pnpm --version
+yarn --version
 ```
 
-### 5. Code Quality Tools
+### 7. Code Quality & TypeScript
 
 ```bash
 npm install -g prettier eslint typescript
@@ -109,7 +138,7 @@ eslint --version
 tsc --version
 ```
 
-### 6. GitHub CLI
+### 8. GitHub CLI
 
 ```bash
 brew install gh
@@ -124,80 +153,118 @@ gh --version
 gh auth status
 ```
 
-### 7. Cloud & Container Tools
+### 9. CLI Utilities
 
 ```bash
-# Docker Desktop (includes CLI and GUI)
-# Note: This may prompt for your password to set up CLI plugins
-brew install --cask docker
-
-# Google Cloud SDK
-brew install --cask google-cloud-sdk
+brew install ripgrep jq fd tree wget htop watchman
 ```
 
-**Docker setup:**
+| Tool | What it does |
+|------|-------------|
+| **ripgrep** (`rg`) | Blazing-fast code search (replaces grep) |
+| **jq** | JSON processor for the command line |
+| **fd** | Fast, user-friendly file finder (replaces find) |
+| **tree** | Directory structure visualization |
+| **wget** | File downloader |
+| **htop** | Interactive system monitor |
+| **watchman** | File watching for Jest, Metro, etc. |
+
+**Verify:**
+```bash
+rg --version
+jq --version
+fd --version
+watchman --version
+```
+
+### 10. Docker Desktop
+
+```bash
+brew install --cask docker
+```
+
+**Setup:**
 - Launch Docker Desktop from Applications folder
 - Wait for Docker daemon to start (Docker icon appears in menu bar)
-- **Important:** Docker will not work until you manually launch the app
+- Docker will not work until you manually launch the app
+
+> **Note:** `brew install --cask docker` may prompt for your administrator password. This is normal -- Docker needs to create CLI plugin directories.
 
 **Verify:**
 ```bash
 docker --version
-docker ps  # This will fail if Docker Desktop isn't running
+docker ps  # Fails if Docker Desktop isn't running
 ```
 
-**gcloud setup:**
+### 11. Cloud CLIs
+
+**Azure CLI:**
 ```bash
-# Initialize and authenticate
+brew install azure-cli
+```
+
+**Setup:**
+```bash
+az login
+az account show
+```
+
+**Google Cloud SDK:**
+```bash
+brew install --cask google-cloud-sdk
+```
+
+**Setup:**
+```bash
 gcloud init
-
-# Verify
-gcloud --version
 gcloud auth list
-
-# Update components (recommended)
 gcloud components update
 ```
 
-**Note:** gcloud may prompt to install Python 3.13 during updates. If you already have Python 3.11+ installed, you can skip this - gcloud works fine with newer Python versions.
+> **Note:** gcloud may prompt to install Python 3.13 during updates. If you already have Python 3.11+ installed, you can skip this -- gcloud works fine with newer Python versions.
 
-### 8. Additional Utilities
+**Verify both:**
+```bash
+az --version
+gcloud --version
+```
+
+### 12. Claude Code (AI-assisted development)
 
 ```bash
-# File watching for Jest, Metro, etc.
-brew install watchman
-
-# Verify
-watchman --version
+npm install -g @anthropic-ai/claude-code
 ```
+
+Requires an Anthropic API key or Claude subscription. Run `claude` in any project directory to start.
 
 ## Complete Tool Reference
 
 ### Core Node.js
 | Tool | Install Command | Notes |
 |------|-----------------|-------|
-| node | `nvm install --lts` | Use nvm for version management |
+| node | `fnm install --lts` | Use fnm for version management |
 | npm | Included with Node.js | - |
 | npx | Included with npm | - |
-| nvm | `brew install nvm` | Requires shell configuration |
+| fnm | `brew install fnm` | Add `eval` line to `~/.zshrc` after install |
 
 ### Package Managers
-| Tool | Install Command |
-|------|-----------------|
-| yarn | `npm install -g yarn` |
-| pnpm | `npm install -g pnpm` |
+| Tool | Install Command | Notes |
+|------|-----------------|-------|
+| pnpm | `npm install -g pnpm` | Recommended for Next.js projects |
+| yarn | `npm install -g yarn` | Widely used in existing projects |
 
 ### Version Control & GitHub
 | Tool | Install Command | Post-Install |
 |------|-----------------|--------------|
-| git | `brew install git` | Configure: `git config --global user.name "Your Name"` |
-| gh (GitHub CLI) | `brew install gh` | Run: `gh auth login` |
+| git | `brew install git` | `git config --global user.name "Your Name"` |
+| gh (GitHub CLI) | `brew install gh` | `gh auth login` |
 
-### Cloud & Containers
-| Tool | Install Command | Post-Install |
-|------|-----------------|--------------|
-| docker | `brew install --cask docker` | Launch Docker Desktop app |
-| gcloud | `brew install --cask google-cloud-sdk` | Run: `gcloud init` |
+### Editor & Terminal
+| Tool | Install Command |
+|------|-----------------|
+| VS Code | `brew install --cask visual-studio-code` |
+| iTerm2 | `brew install --cask iterm2` |
+| Warp | `brew install --cask warp` |
 
 ### Code Quality & TypeScript
 | Tool | Install Command |
@@ -206,13 +273,20 @@ watchman --version
 | eslint | `npm install -g eslint` |
 | typescript (tsc) | `npm install -g typescript` |
 
-### Utilities
+### Containers & Cloud
+| Tool | Install Command | Post-Install |
+|------|-----------------|--------------|
+| docker | `brew install --cask docker` | Launch Docker Desktop app |
+| az (Azure CLI) | `brew install azure-cli` | `az login` |
+| gcloud | `brew install --cask google-cloud-sdk` | `gcloud init` |
+
+### CLI Utilities
 | Tool | Description | Install Command |
 |------|-------------|-----------------|
-| ripgrep (rg) | Fast code search | `brew install ripgrep` |
+| ripgrep (`rg`) | Fast code search | `brew install ripgrep` |
 | jq | JSON processor | `brew install jq` |
-| tree | Directory structure visualization | `brew install tree` |
 | fd | Fast file finder | `brew install fd` |
+| tree | Directory structure | `brew install tree` |
 | wget | File downloader | `brew install wget` |
 | htop | System monitor | `brew install htop` |
 | watchman | File watching (Jest, Metro) | `brew install watchman` |
@@ -221,23 +295,25 @@ watchman --version
 
 ## Quick Batch Install
 
-If you prefer to install everything at once (after prerequisites):
+After prerequisites (Xcode CLI tools + Homebrew), install everything at once:
 
 ```bash
-# Homebrew packages
-brew install nvm git gh ripgrep jq tree fd wget htop watchman
-brew install --cask docker google-cloud-sdk
+# ── Homebrew packages ──
+brew install git fnm gh ripgrep jq fd tree wget htop watchman
+brew install azure-cli
+brew install --cask visual-studio-code docker google-cloud-sdk
 
-# Configure nvm (add to ~/.zshrc, then source it)
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+# ── Configure fnm in ~/.zshrc ──
+# Add this line:
+#   eval "$(fnm env --use-on-cd --shell zsh)"
+source ~/.zshrc
 
-# Install Node.js
-nvm install --lts
-nvm alias default lts/*
+# ── Install Node.js via fnm ──
+fnm install --lts
+fnm default lts-latest
 
-# Global npm packages
-npm install -g yarn pnpm prettier eslint typescript
+# ── Global npm packages ──
+npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code
 ```
 
 ## Verified Versions (as of February 2026)
@@ -246,33 +322,37 @@ These versions are known to work well together:
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Node.js | 22.22.0 | Latest LTS |
-| npm | 10.9.4 | Included with Node.js |
-| nvm | 0.40.3 | - |
-| Yarn | 1.22.22 | - |
-| pnpm | 10.28.2 | - |
-| Prettier | 3.8.1 | - |
-| ESLint | 9.39.2 | - |
-| TypeScript | 5.9.3 | - |
+| Node.js | 24.13.0 | Latest LTS (Krypton) |
+| npm | 11.x | Included with Node.js 24 |
+| fnm | 1.38.x | - |
+| pnpm | 10.x | - |
+| Yarn | 1.22.x | Classic; Yarn 4.x available via `corepack` |
+| Prettier | 3.8.x | - |
+| ESLint | 10.x | Flat config is the default |
+| TypeScript | 5.9.x | - |
 | GitHub CLI | 2.86.0+ | - |
+| Azure CLI | 2.83.0+ | - |
 | Google Cloud SDK | 555.0.0+ | - |
-| Docker | 29.2.0+ | - |
-| Homebrew | 5.0.13+ | - |
+| Docker | 29.x | - |
+| VS Code | 1.98+ | - |
+| Homebrew | 5.0.x | - |
 
-## Development Environment
+## Optional but Recommended
 
-### Recommended Text Editors/IDEs
+### API Testing
 
-- **VS Code**: `brew install --cask visual-studio-code`
-- **WebStorm**: `brew install --cask webstorm`
-- **Sublime Text**: `brew install --cask sublime-text`
-- **Vim/Neovim**: `brew install neovim`
+For testing REST APIs and GraphQL endpoints during development:
 
-### Recommended Terminal Emulators
+- **VS Code REST Client** (already in recommended extensions above) -- lightweight, lives in your editor
+- **Postman**: `brew install --cask postman` -- full-featured GUI for teams
+- **Bruno**: `brew install --cask bruno` -- open-source, Git-friendly alternative to Postman
 
-- **iTerm2**: `brew install --cask iterm2`
-- **Warp**: `brew install --cask warp`
-- **Alacritty**: `brew install --cask alacritty`
+### Database GUI
+
+If working with databases (Postgres, MySQL, MongoDB, etc.):
+
+- **DBeaver**: `brew install --cask dbeaver-community` -- universal database client, works with all major databases
+- **Prisma Studio**: `npx prisma studio` -- built into Prisma, no extra install needed
 
 ## Per-Project Tools (Install Locally)
 
@@ -280,17 +360,21 @@ These should typically be installed as dev dependencies in each project:
 
 ```bash
 npm install --save-dev <tool>
+# or with pnpm:
+pnpm add -D <tool>
 ```
 
 **Common per-project tools:**
-- `ts-node` - TypeScript execution
-- `tsx` - Enhanced TypeScript execution
-- `jest` - Testing framework
-- `vitest` - Fast testing framework
-- `nodemon` - Auto-restart on file changes
-- `pm2` - Process manager
-- `concurrently` - Run multiple commands
+- `typescript` / `tsx` - TypeScript compiler and fast execution
+- `vitest` or `jest` - Testing frameworks
+- `nodemon` - Auto-restart on file changes during development
+- `concurrently` - Run multiple commands in parallel
 - `cross-env` - Cross-platform environment variables
+- `dotenv` - Load environment variables from `.env` files
+- `husky` - Git hooks (pre-commit linting, etc.)
+- `lint-staged` - Run linters only on staged files (pairs with husky)
+- `prisma` - Database ORM (common in Next.js projects)
+- `tailwindcss` - Utility-first CSS framework
 
 ## Verification Script
 
@@ -307,19 +391,22 @@ commands=(
     "node:Node.js"
     "npm:npm"
     "npx:npx"
-    "nvm:nvm"
-    "yarn:Yarn"
+    "fnm:fnm"
     "pnpm:pnpm"
+    "yarn:Yarn"
     "prettier:Prettier"
     "eslint:ESLint"
     "tsc:TypeScript"
     "gh:GitHub CLI"
     "docker:Docker"
+    "az:Azure CLI"
     "gcloud:Google Cloud SDK"
     "rg:ripgrep"
     "jq:jq"
-    "tree:tree"
     "fd:fd"
+    "tree:tree"
+    "watchman:watchman"
+    "code:VS Code"
 )
 
 for cmd in "${commands[@]}"; do
@@ -337,35 +424,37 @@ done
 
 After installing all tools, verify these key items:
 
-- [ ] **Node.js**: `node --version` shows v22.x or later
-- [ ] **nvm configured**: Shell restarts without "nvm: command not found"
+- [ ] **Node.js**: `node --version` shows v24.x or later
+- [ ] **fnm configured**: New terminal sessions auto-detect `.nvmrc` / `.node-version` files
+- [ ] **VS Code**: Opens from terminal with `code .`
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
-- [ ] **gcloud authenticated**: `gcloud auth list` shows your account
 - [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
-- [ ] **Git configured**: Set `git config --global user.name` and `git config --global user.email`
-
-**Optional but recommended:**
-- [ ] Configure Git: `git config --global init.defaultBranch main`
-- [ ] Test Node: Create a simple script and run with `node script.js`
-- [ ] Test package managers: `npm --version`, `yarn --version`, `pnpm --version`
+- [ ] **Azure authenticated**: `az account show` shows your subscription
+- [ ] **gcloud authenticated**: `gcloud auth list` shows your account
+- [ ] **Git configured**: `git config --global user.name` and `git config --global user.email` are set
 
 ## Troubleshooting
 
-### nvm command not found
-- Ensure you added the nvm configuration to your shell profile
+### fnm command not found
+- Ensure you added `eval "$(fnm env --use-on-cd --shell zsh)"` to `~/.zshrc`
 - Run `source ~/.zshrc` or restart your terminal
+
+### node command not found (after fnm install)
+- Make sure your shell profile sources fnm (see step 4)
+- Run `fnm use lts-latest` to activate a version in the current session
+- Run `fnm default lts-latest` so it persists across sessions
 
 ### Docker installation requires password
 - `brew install --cask docker` may prompt for your administrator password
-- This is normal - Docker needs to create CLI plugin directories
+- This is normal -- Docker needs to create CLI plugin directories
 - Enter your password when prompted to complete installation
 
 ### Docker daemon not running
 - Docker CLI is installed but daemon must be started manually
 - Launch Docker Desktop from Applications folder
 - Wait for Docker icon to appear in menu bar
-- Verify with `docker ps` - if it fails, Docker Desktop isn't running
+- Verify with `docker ps` -- if it fails, Docker Desktop isn't running
 
 ### gcloud prompts to install Python
 - gcloud may suggest installing Python 3.13 during updates
@@ -374,18 +463,23 @@ After installing all tools, verify these key items:
 
 ### Permission errors with npm global install
 - Don't use `sudo` with npm
-- If issues persist, consider using nvm (recommended) or reconfigure npm prefix
+- If issues persist, consider using fnm (recommended) or reconfigure npm prefix
 
 ### Homebrew installation path issues
-- Apple Silicon (M1/M2/M3): Homebrew installs to `/opt/homebrew`
+- Apple Silicon (M1/M2/M3/M4): Homebrew installs to `/opt/homebrew`
 - Intel Macs: Homebrew installs to `/usr/local`
 - Ensure correct path in shell configuration
 
 ## Additional Resources
 
-- [nvm documentation](https://github.com/nvm-sh/nvm)
+- [fnm documentation](https://github.com/Schniz/fnm)
 - [Homebrew documentation](https://docs.brew.sh/)
-- [Node.js best practices](https://github.com/goldbergyoni/nodebestpractices)
+- [Node.js releases](https://nodejs.org/en/about/previous-releases)
+- [Next.js documentation](https://nextjs.org/docs)
+- [pnpm documentation](https://pnpm.io)
+- [Azure CLI documentation](https://learn.microsoft.com/en-us/cli/azure/)
+- [Google Cloud CLI documentation](https://cloud.google.com/sdk/docs)
+- [VS Code documentation](https://code.visualstudio.com/docs)
 
 ## Maintenance
 
@@ -399,8 +493,11 @@ brew update && brew upgrade
 npm update -g
 
 # Update Node.js to latest LTS
-nvm install --lts
-nvm alias default lts/*
+fnm install --lts
+fnm default lts-latest
+
+# Update Azure CLI
+az upgrade
 
 # Update Google Cloud SDK components
 gcloud components update
@@ -408,6 +505,5 @@ gcloud components update
 
 **Recommended maintenance schedule:**
 - Weekly: `brew update && brew upgrade`
-- Monthly: Check for Node.js LTS updates with `nvm install --lts`
+- Monthly: Check for Node.js LTS updates with `fnm install --lts`
 - As needed: `npm update -g` for global packages
-- As needed: `gcloud components update` when prompted
