@@ -135,6 +135,8 @@ fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
 > ```powershell
 > New-Item -Path $PROFILE -ItemType File -Force
 > ```
+>
+> See **section 11** for the full recommended PowerShell profile (includes Starship, PSReadLine, Terminal-Icons, and more).
 
 **Restart your terminal**, then verify:
 ```powershell
@@ -252,6 +254,10 @@ winget install sharkdp.fd
 winget install sharkdp.bat
 winget install dandavison.delta
 winget install gnuwin32.tree
+winget install junegunn.fzf
+winget install eza-community.eza
+winget install tldr-pages.tlrc
+# winget install ajeetdsouza.zoxide  # Optional -- smarter cd that learns your habits
 ```
 
 | Tool | What it does |
@@ -262,6 +268,10 @@ winget install gnuwin32.tree
 | **bat** | `cat` replacement with syntax highlighting and line numbers |
 | **delta** | Syntax-highlighting pager for git diffs and blame |
 | **tree** | Directory structure visualization |
+| **fzf** | Fuzzy finder for files, command history, and more |
+| **eza** | Modern `ls` replacement with colors, icons, and git status |
+| **tlrc** (`tldr`) | Fast tldr client -- simplified, example-based command help |
+| **zoxide** (`z`) (optional) | Smarter `cd` that learns your most-used directories |
 
 > **Tip:** To make delta your default git diff pager, add to your git config:
 > ```powershell
@@ -279,9 +289,65 @@ fd --version
 bat --version
 delta --version
 tree --version
+fzf --version
+eza --version
+tldr --version
+# zoxide --version  # If installed
 ```
 
-### 11. Docker Desktop (optional)
+### 11. Shell Experience (Starship & PowerShell Enhancements)
+
+A modern shell prompt and quality-of-life PowerShell modules make the terminal significantly more productive.
+
+**Install a Nerd Font** for icon support in Starship and eza. Recommended: **CaskaydiaCove Nerd Font**.
+
+Download from [nerdfonts.com](https://www.nerdfonts.com/font-downloads), install the font, then set it in Windows Terminal: **Settings > Profiles > Defaults > Appearance > Font face**.
+
+> **Tip:** You can install Nerd Fonts via `oh-my-posh font install` if you have oh-my-posh, or manually from the website. The font only needs to be set in your terminal emulator, not system-wide.
+
+**Install Starship and PowerShell modules:**
+
+```powershell
+winget install Starship.Starship
+
+# PSReadLine (update to latest for predictive IntelliSense)
+Install-Module PSReadLine -Force
+
+# Terminal-Icons (file/folder icons in directory listings)
+Install-Module Terminal-Icons -Repository PSGallery -Force
+```
+
+**Configure your PowerShell profile** (`notepad $PROFILE`):
+
+```powershell
+# Initialize fnm (Node.js version manager)
+fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+
+# Shell modules
+Import-Module Terminal-Icons
+
+# PSReadLine enhancements
+Set-PSReadLineOption -PredictionSource History
+Set-PSReadLineOption -Colors @{ InlinePrediction = '#717171' }
+Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+
+# Initialize zoxide (if installed -- optional)
+# Invoke-Expression (& { (zoxide init powershell | Out-String) })
+
+# Initialize Starship prompt (must be last)
+Invoke-Expression (&starship init powershell)
+```
+
+> **Why last?** Starship replaces the prompt function, so it must be initialized after other tools that modify the prompt.
+
+**Customize Starship** (optional): Create `~/.config/starship.toml` to configure which modules appear in your prompt. Starship auto-detects Node.js, Git, Python, Docker, and many more. See [starship.rs/config](https://starship.rs/config/) for all options.
+
+**Verify:**
+```powershell
+starship --version
+```
+
+### 12. Docker Desktop (optional)
 
 > **Skip this if** you don't need containerized development, databases in containers, or Docker-based deployment workflows. Many Node.js/Next.js projects run fine without Docker. Install it when a project requires it.
 
@@ -307,7 +373,7 @@ docker ps  # Fails if Docker Desktop isn't running
 > ```
 > This requires a restart.
 
-### 12. Python & Build Tools (for native modules)
+### 13. Python & Build Tools (for native modules)
 
 Some npm packages with native C/C++ addons (via `node-gyp`) require Python and C++ build tools. Install both to avoid build failures with packages like `bcrypt`, `sharp`, `sqlite3`, etc.:
 
@@ -329,7 +395,7 @@ Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
 python --version
 ```
 
-### 13. Cloud CLIs
+### 14. Cloud CLIs
 
 **Azure CLI:**
 ```powershell
@@ -360,7 +426,7 @@ az --version
 gcloud --version
 ```
 
-### 14. AI-Assisted Development CLIs
+### 15. AI-Assisted Development CLIs
 
 Terminal-based AI coding assistants that run directly in your project directory:
 
@@ -432,7 +498,17 @@ gemini --version
 | bat | Syntax-highlighting cat | `winget install sharkdp.bat` |
 | delta | Better git diffs | `winget install dandavison.delta` |
 | tree | Directory structure | `winget install gnuwin32.tree` |
+| fzf | Fuzzy finder | `winget install junegunn.fzf` |
+| eza | Modern ls replacement | `winget install eza-community.eza` |
+| tlrc (`tldr`) | Simplified command help | `winget install tldr-pages.tlrc` |
 | curl | HTTP client | Included with Windows 10/11 |
+
+### Shell Experience
+| Tool | Install Command | Notes |
+|------|-----------------|-------|
+| Starship | `winget install Starship.Starship` | Cross-shell prompt; needs Nerd Font |
+| PSReadLine | `Install-Module PSReadLine -Force` | Predictive IntelliSense |
+| Terminal-Icons | `Install-Module Terminal-Icons -Repository PSGallery -Force` | File icons in listings |
 
 ## Quick Batch Install
 
@@ -464,6 +540,11 @@ winget install sharkdp.fd
 winget install sharkdp.bat
 winget install dandavison.delta
 winget install gnuwin32.tree
+winget install junegunn.fzf
+winget install eza-community.eza
+winget install tldr-pages.tlrc
+winget install Starship.Starship
+# winget install ajeetdsouza.zoxide  # Optional -- smarter cd
 
 # RESTART YOUR TERMINAL after the above installs
 
@@ -475,9 +556,12 @@ git config --global core.autocrlf true
 git config --global core.longpaths true
 git config --global credential.helper manager
 
-# ── Configure fnm in PowerShell profile ──
-# Add to $PROFILE:
-#   fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+# ── PowerShell modules ──
+Install-Module PSReadLine -Force
+Install-Module Terminal-Icons -Repository PSGallery -Force
+
+# ── Configure PowerShell profile ──
+# Add to $PROFILE (see section 11 for full profile):
 
 # ── Install Node.js via fnm ──
 fnm install --lts
@@ -520,6 +604,11 @@ These versions are known to work well together:
 | fd | 10.3.0 | - |
 | bat | 0.25.0 | - |
 | delta | 0.18.2 | - |
+| fzf | 0.60.x | - |
+| eza | 0.21.x | Requires Nerd Font for icons |
+| tlrc | 1.9.x | - |
+| Starship | 1.23.x | Requires Nerd Font |
+| zoxide | 0.9.x | Optional |
 | Claude Code | 2.1.37 | Anthropic AI coding assistant |
 | Codex CLI | 0.89.0 | OpenAI coding assistant |
 | Gemini CLI | 0.25.2 | Google AI coding assistant |
@@ -596,6 +685,11 @@ $commands = @(
     @{cmd="jq"; args="--version"; name="jq"},
     @{cmd="fd"; args="--version"; name="fd"},
     @{cmd="tree"; args="--version"; name="tree"},
+    @{cmd="fzf"; args="--version"; name="fzf"},
+    @{cmd="eza"; args="--version"; name="eza"},
+    @{cmd="tldr"; args="--version"; name="tlrc"},
+    @{cmd="starship"; args="--version"; name="Starship"},
+    @{cmd="zoxide"; args="--version"; name="zoxide"},
     @{cmd="ssh"; args="-V"; name="OpenSSH"},
     @{cmd="code"; args="--version"; name="VS Code"}
 )
@@ -662,6 +756,8 @@ After installing all tools, verify these key items:
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
 - [ ] **Azure authenticated**: `az account show` shows your subscription
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account
+- [ ] **Starship prompt**: Terminal shows customized prompt with git/node info
+- [ ] **Nerd Font configured**: Windows Terminal uses a Nerd Font (e.g., CaskaydiaCove)
 
 ## Troubleshooting
 
