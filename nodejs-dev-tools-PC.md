@@ -249,6 +249,8 @@ ssh -T git@github.com
 winget install BurntSushi.ripgrep.MSVC
 winget install jqlang.jq
 winget install sharkdp.fd
+winget install sharkdp.bat
+winget install dandavison.delta
 winget install gnuwin32.tree
 ```
 
@@ -257,17 +259,31 @@ winget install gnuwin32.tree
 | **ripgrep** (`rg`) | Blazing-fast code search (replaces grep) |
 | **jq** | JSON processor for the command line |
 | **fd** | Fast, user-friendly file finder (replaces find) |
+| **bat** | `cat` replacement with syntax highlighting and line numbers |
+| **delta** | Syntax-highlighting pager for git diffs and blame |
 | **tree** | Directory structure visualization |
+
+> **Tip:** To make delta your default git diff pager, add to your git config:
+> ```powershell
+> git config --global core.pager delta
+> git config --global interactive.diffFilter "delta --color-only"
+> git config --global delta.navigate true
+> git config --global merge.conflictStyle zdiff3
+> ```
 
 **Verify:**
 ```powershell
 rg --version
 jq --version
 fd --version
+bat --version
+delta --version
 tree --version
 ```
 
-### 11. Docker Desktop
+### 11. Docker Desktop (optional)
+
+> **Skip this if** you don't need containerized development, databases in containers, or Docker-based deployment workflows. Many Node.js/Next.js projects run fine without Docker. Install it when a project requires it.
 
 ```powershell
 winget install Docker.DockerDesktop
@@ -344,13 +360,26 @@ az --version
 gcloud --version
 ```
 
-### 14. Claude Code (AI-assisted development)
+### 14. AI-Assisted Development CLIs
+
+Terminal-based AI coding assistants that run directly in your project directory:
 
 ```powershell
-npm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli
 ```
 
-Requires an Anthropic API key or Claude subscription. Run `claude` in any project directory to start.
+| Tool | Command | Auth |
+|------|---------|------|
+| **Claude Code** | `claude` | Anthropic API key or Claude subscription |
+| **Codex CLI** | `codex` | OpenAI API key |
+| **Gemini CLI** | `gemini` | Google AI API key or `gcloud auth login` |
+
+**Verify:**
+```powershell
+claude --version
+codex --version
+gemini --version
+```
 
 ## Complete Tool Reference
 
@@ -390,7 +419,7 @@ Requires an Anthropic API key or Claude subscription. Run `claude` in any projec
 ### Containers & Cloud
 | Tool | Install Command | Post-Install |
 |------|-----------------|--------------|
-| docker | `winget install Docker.DockerDesktop` | Launch Docker Desktop, enable WSL 2 |
+| docker (optional) | `winget install Docker.DockerDesktop` | Launch Docker Desktop, enable WSL 2 |
 | az (Azure CLI) | `winget install Microsoft.AzureCLI` | `az login` |
 | gcloud | `winget install Google.CloudSDK` | `gcloud init` |
 
@@ -400,6 +429,8 @@ Requires an Anthropic API key or Claude subscription. Run `claude` in any projec
 | ripgrep (`rg`) | Fast code search | `winget install BurntSushi.ripgrep.MSVC` |
 | jq | JSON processor | `winget install jqlang.jq` |
 | fd | Fast file finder | `winget install sharkdp.fd` |
+| bat | Syntax-highlighting cat | `winget install sharkdp.bat` |
+| delta | Better git diffs | `winget install dandavison.delta` |
 | tree | Directory structure | `winget install gnuwin32.tree` |
 | curl | HTTP client | Included with Windows 10/11 |
 
@@ -422,7 +453,7 @@ winget install Git.Git
 winget install Microsoft.VisualStudioCode
 winget install Schniz.fnm
 winget install GitHub.cli
-winget install Docker.DockerDesktop
+# winget install Docker.DockerDesktop  # Optional -- uncomment if needed
 winget install Python.Python.3.12
 winget install Microsoft.VisualStudio.2022.BuildTools
 winget install Microsoft.AzureCLI
@@ -430,6 +461,8 @@ winget install Google.CloudSDK
 winget install BurntSushi.ripgrep.MSVC
 winget install jqlang.jq
 winget install sharkdp.fd
+winget install sharkdp.bat
+winget install dandavison.delta
 winget install gnuwin32.tree
 
 # RESTART YOUR TERMINAL after the above installs
@@ -452,7 +485,7 @@ fnm default lts-latest
 
 # ── Global npm packages ──
 corepack enable
-npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code
+npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code @openai/codex @google/gemini-cli
 Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
 
 # ── SSH key (interactive) ──
@@ -469,7 +502,7 @@ These versions are known to work well together:
 |------|---------|-------|
 | Git | 2.53.0 | - |
 | Node.js | 24.13.0 | Latest LTS (Krypton) |
-| npm | 11.6.2 | Included with Node.js 24 |
+| npm | 11.7.0 | Included with Node.js 24 |
 | fnm | 1.38.1 | - |
 | pnpm | 10.29.1 | - |
 | Yarn | 1.22.22 | Classic; Yarn 4.x available via `corepack` |
@@ -479,12 +512,17 @@ These versions are known to work well together:
 | GitHub CLI | 2.86.0 | - |
 | Azure CLI | 2.83.0 | - |
 | Google Cloud SDK | 555.0.0+ | Requires Python on PATH |
-| Docker | 29.x | - |
+| Docker | 29.x | Optional; install when a project requires it |
 | Python | 3.12.10 | Required for node-gyp and gcloud |
-| VS Code | 1.108.0 | - |
-| ripgrep | 14.1.1 | - |
+| VS Code | 1.109.0 | - |
+| ripgrep | 15.1.0 | - |
 | jq | 1.8.1 | - |
 | fd | 10.3.0 | - |
+| bat | 0.25.0 | - |
+| delta | 0.18.2 | - |
+| Claude Code | 2.1.37 | Anthropic AI coding assistant |
+| Codex CLI | 0.89.0 | OpenAI coding assistant |
+| Gemini CLI | 0.25.2 | Google AI coding assistant |
 
 ## Optional but Recommended
 
@@ -546,6 +584,11 @@ $commands = @(
     @{cmd="tsc"; args="--version"; name="TypeScript"},
     @{cmd="gh"; args="--version"; name="GitHub CLI"},
     @{cmd="python"; args="--version"; name="Python"},
+    @{cmd="bat"; args="--version"; name="bat"},
+    @{cmd="delta"; args="--version"; name="delta"},
+    @{cmd="claude"; args="--version"; name="Claude Code"},
+    @{cmd="codex"; args="--version"; name="Codex CLI"},
+    @{cmd="gemini"; args="--version"; name="Gemini CLI"},
     @{cmd="docker"; args="--version"; name="Docker"},
     @{cmd="az"; args="--version"; name="Azure CLI"},
     @{cmd="gcloud"; args="--version"; name="Google Cloud SDK"},
@@ -615,7 +658,7 @@ After installing all tools, verify these key items:
 - [ ] **SSH agent running** (if using SSH): `Get-Service ssh-agent` shows `Running`
 - [ ] **SSH key added** (if using SSH): `ssh -T git@github.com` authenticates successfully
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
-- [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
+- [ ] **Docker running** (if installed): `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
 - [ ] **Azure authenticated**: `az account show` shows your subscription
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account

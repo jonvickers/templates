@@ -196,7 +196,7 @@ ssh -T git@github.com
 ### 10. CLI Utilities
 
 ```bash
-brew install ripgrep jq fd tree wget htop watchman
+brew install ripgrep jq fd bat git-delta tree wget htop watchman
 ```
 
 | Tool | What it does |
@@ -204,20 +204,34 @@ brew install ripgrep jq fd tree wget htop watchman
 | **ripgrep** (`rg`) | Blazing-fast code search (replaces grep) |
 | **jq** | JSON processor for the command line |
 | **fd** | Fast, user-friendly file finder (replaces find) |
+| **bat** | `cat` replacement with syntax highlighting and line numbers |
+| **delta** | Syntax-highlighting pager for git diffs and blame |
 | **tree** | Directory structure visualization |
 | **wget** | File downloader |
 | **htop** | Interactive system monitor |
 | **watchman** | File watching for Jest, Metro, etc. |
+
+> **Tip:** To make delta your default git diff pager, add to your git config:
+> ```bash
+> git config --global core.pager delta
+> git config --global interactive.diffFilter "delta --color-only"
+> git config --global delta.navigate true
+> git config --global merge.conflictStyle zdiff3
+> ```
 
 **Verify:**
 ```bash
 rg --version
 jq --version
 fd --version
+bat --version
+delta --version
 watchman --version
 ```
 
-### 11. Docker Desktop
+### 11. Docker Desktop (optional)
+
+> **Skip this if** you don't need containerized development, databases in containers, or Docker-based deployment workflows. Many Node.js/Next.js projects run fine without Docker. Install it when a project requires it.
 
 ```bash
 brew install --cask docker
@@ -269,13 +283,26 @@ az --version
 gcloud --version
 ```
 
-### 13. Claude Code (AI-assisted development)
+### 13. AI-Assisted Development CLIs
+
+Terminal-based AI coding assistants that run directly in your project directory:
 
 ```bash
-npm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli
 ```
 
-Requires an Anthropic API key or Claude subscription. Run `claude` in any project directory to start.
+| Tool | Command | Auth |
+|------|---------|------|
+| **Claude Code** | `claude` | Anthropic API key or Claude subscription |
+| **Codex CLI** | `codex` | OpenAI API key |
+| **Gemini CLI** | `gemini` | Google AI API key or `gcloud auth login` |
+
+**Verify:**
+```bash
+claude --version
+codex --version
+gemini --version
+```
 
 ## Complete Tool Reference
 
@@ -316,7 +343,7 @@ Requires an Anthropic API key or Claude subscription. Run `claude` in any projec
 ### Containers & Cloud
 | Tool | Install Command | Post-Install |
 |------|-----------------|--------------|
-| docker | `brew install --cask docker` | Launch Docker Desktop app |
+| docker (optional) | `brew install --cask docker` | Launch Docker Desktop app |
 | az (Azure CLI) | `brew install azure-cli` | `az login` |
 | gcloud | `brew install --cask google-cloud-sdk` | `gcloud init` |
 
@@ -326,6 +353,8 @@ Requires an Anthropic API key or Claude subscription. Run `claude` in any projec
 | ripgrep (`rg`) | Fast code search | `brew install ripgrep` |
 | jq | JSON processor | `brew install jq` |
 | fd | Fast file finder | `brew install fd` |
+| bat | Syntax-highlighting cat | `brew install bat` |
+| delta | Better git diffs | `brew install git-delta` |
 | tree | Directory structure | `brew install tree` |
 | wget | File downloader | `brew install wget` |
 | htop | System monitor | `brew install htop` |
@@ -339,9 +368,10 @@ After prerequisites (Xcode CLI tools + Homebrew), install everything at once:
 
 ```bash
 # ── Homebrew packages ──
-brew install git fnm gh ripgrep jq fd tree wget htop watchman
+brew install git fnm gh ripgrep jq fd bat git-delta tree wget htop watchman
 brew install azure-cli
-brew install --cask visual-studio-code docker google-cloud-sdk
+brew install --cask visual-studio-code google-cloud-sdk
+# brew install --cask docker  # Optional -- uncomment if needed
 
 # ── Configure fnm in ~/.zshrc ──
 # Add this line:
@@ -354,7 +384,7 @@ fnm default lts-latest
 
 # ── Global npm packages ──
 corepack enable
-npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code
+npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code @openai/codex @google/gemini-cli
 
 # ── SSH key (interactive) ──
 # ssh-keygen -t ed25519 -C "you@example.com"
@@ -370,7 +400,7 @@ These versions are known to work well together:
 |------|---------|-------|
 | Git | 2.53.0 | - |
 | Node.js | 24.13.0 | Latest LTS (Krypton) |
-| npm | 11.6.2 | Included with Node.js 24 |
+| npm | 11.7.0 | Included with Node.js 24 |
 | fnm | 1.38.1 | - |
 | pnpm | 10.29.1 | - |
 | Yarn | 1.22.22 | Classic; Yarn 4.x available via `corepack` |
@@ -380,11 +410,16 @@ These versions are known to work well together:
 | GitHub CLI | 2.86.0 | - |
 | Azure CLI | 2.83.0 | - |
 | Google Cloud SDK | 555.0.0+ | - |
-| Docker | 29.x | - |
-| VS Code | 1.108.0 | - |
-| ripgrep | 14.1.1 | - |
+| Docker | 29.x | Optional; install when a project requires it |
+| VS Code | 1.109.0 | - |
+| ripgrep | 15.1.0 | - |
 | jq | 1.8.1 | - |
 | fd | 10.3.0 | - |
+| bat | 0.25.0 | - |
+| delta | 0.18.2 | - |
+| Claude Code | 2.1.37 | Anthropic AI coding assistant |
+| Codex CLI | 0.89.0 | OpenAI coding assistant |
+| Gemini CLI | 0.25.2 | Google AI coding assistant |
 | Homebrew | 5.0.x | - |
 
 ## Optional but Recommended
@@ -454,7 +489,12 @@ commands=(
     "rg:ripgrep"
     "jq:jq"
     "fd:fd"
+    "bat:bat"
+    "delta:delta"
     "tree:tree"
+    "claude:Claude Code"
+    "codex:Codex CLI"
+    "gemini:Gemini CLI"
     "watchman:watchman"
     "ssh:OpenSSH"
     "code:VS Code"
@@ -481,7 +521,7 @@ After installing all tools, verify these key items:
 - [ ] **Git configured**: `git config --global user.name` and `git config --global user.email` are set
 - [ ] **SSH key added** (if using SSH): `ssh -T git@github.com` authenticates successfully
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
-- [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
+- [ ] **Docker running** (if installed): `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
 - [ ] **Azure authenticated**: `az account show` shows your subscription
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account
