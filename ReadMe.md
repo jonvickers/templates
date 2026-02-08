@@ -1,24 +1,8 @@
-# Title Title Title
+# Templates
 
-This is a sample Readme.md file
+Quick reference links to all templates in this repo.
 
-* [Internal Bookmark](#heading-2)
-* [Internal Bookmark](#sub-heading-3)
+## Dev Tools Setup Guides
 
-## Heading 2
-example of code using 2 tabs and space above and below
-
-    npm install
-
-example text example text example text
-
-### Sub Heading 3
-
-    npm start
-
-## Link Examples
-
-See [Link Example][link1].
-
-[link1]: https://google.com
-[link2]: https://microsoft.com
+- [Node.js Dev Tools - macOS](nodejs-dev-tools-macOS.md)
+- [Node.js Dev Tools - PC (Windows)](nodejs-dev-tools-PC.md)
