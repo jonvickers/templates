@@ -211,7 +211,9 @@ gh --version
 gh auth status
 ```
 
-### 9. SSH Keys
+### 9. SSH Keys (optional)
+
+> **Skip this if** you're happy using HTTPS with Git Credential Manager (configured in step 2). SSH is an alternative authentication method -- useful if you work with multiple Git hosts, need deploy keys, or prefer key-based auth.
 
 Set up SSH for GitHub, Azure DevOps, and remote server access.
 
@@ -607,8 +609,8 @@ After installing all tools, verify these key items:
 - [ ] **VS Code**: Opens from terminal with `code .`
 - [ ] **Git configured**: `git config --global user.name` and `git config --global user.email` are set
 - [ ] **Git Credential Manager**: `git config --global credential.helper` returns `manager`
-- [ ] **SSH agent running**: `Get-Service ssh-agent` shows `Running`
-- [ ] **SSH key added**: `ssh -T git@github.com` authenticates successfully
+- [ ] **SSH agent running** (if using SSH): `Get-Service ssh-agent` shows `Running`
+- [ ] **SSH key added** (if using SSH): `ssh -T git@github.com` authenticates successfully
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
 - [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
