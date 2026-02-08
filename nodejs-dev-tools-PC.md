@@ -300,10 +300,13 @@ winget install Python.Python.3.12
 winget install Microsoft.VisualStudio.2022.BuildTools
 ```
 
-After installing Build Tools, configure npm to use them:
+After installing Build Tools, configure node-gyp to use them by adding to your `~/.npmrc`:
 ```powershell
-npm config set msvs_version 2022
+# Create or edit ~/.npmrc
+Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
 ```
+
+> **Note:** `npm config set msvs_version 2022` no longer works in npm 11+. Setting it directly in `.npmrc` is the correct approach.
 
 **Verify:**
 ```powershell
@@ -450,7 +453,7 @@ fnm default lts-latest
 # ── Global npm packages ──
 corepack enable
 npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code
-npm config set msvs_version 2022
+Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
 
 # ── SSH key (interactive) ──
 # ssh-keygen -t ed25519 -C "you@example.com"
@@ -668,7 +671,7 @@ After installing all tools, verify these key items:
 ### Native module build failures (node-gyp)
 - Install Python: `winget install Python.Python.3.12`
 - Install Visual Studio Build Tools: `winget install Microsoft.VisualStudio.2022.BuildTools`
-- Then run: `npm config set msvs_version 2022`
+- Add `msvs_version=2022` to `~/.npmrc` (`npm config set` no longer works in npm 11+)
 
 ### SSH agent won't start
 - The OpenSSH Authentication Agent service is disabled by default on Windows
