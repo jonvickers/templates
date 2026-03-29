@@ -1,6 +1,6 @@
-# Node.js Development Station Setup Guide (macOS)
+# Node.js Development Station Setup Guide
 
-Complete guide for setting up a macOS development environment for Node.js and Next.js development.
+Complete guide for setting up a macOS development environment for Node.js development.
 
 ## Prerequisites
 
@@ -22,63 +22,48 @@ Before starting, ensure you have:
 
 Follow this sequence to avoid dependency issues:
 
-### 1. Terminal (optional upgrade)
-
-The built-in Terminal.app works fine. Popular upgrades:
-
-- **iTerm2**: `brew install --cask iterm2`
-- **Warp**: `brew install --cask warp`
-
-### 2. Git
+### 1. Core System Tools
 
 ```bash
+# Version control
 brew install git
+
+# Essential utilities
+brew install ripgrep jq tree fd wget
+
+# System monitoring
+brew install htop
 ```
 
-**Configure:**
+**Important — Git PATH priority:** macOS ships its own older Git at `/usr/bin/git`. After `brew install git`, verify you're using Homebrew's version:
 ```bash
-git config --global user.name "Your Name"
-git config --global user.email "you@example.com"
-git config --global init.defaultBranch main
+which git    # Should show /opt/homebrew/bin/git (Apple Silicon) or /usr/local/bin/git (Intel)
+git --version
 ```
+If `which git` still shows `/usr/bin/git`, ensure Homebrew's bin directory appears before `/usr/bin` in your `$PATH` (Homebrew's default shell setup handles this).
 
 **Verify:**
 ```bash
 git --version
+rg --version
+jq --version
 ```
 
-### 3. VS Code
-
-The standard editor for Node.js and Next.js development:
+### 2. Node.js Version Manager
 
 ```bash
-brew install --cask visual-studio-code
+# Install nvm
+brew install nvm
+
+# Create nvm directory
+mkdir ~/.nvm
 ```
 
-**Recommended extensions** (install from VS Code or CLI):
+**Configure nvm** - Add to `~/.zshrc` (or `~/.bashrc` if using bash):
 ```bash
-code --install-extension dbaeumer.vscode-eslint
-code --install-extension esbenp.prettier-vscode
-code --install-extension bradlc.vscode-tailwindcss
-code --install-extension Prisma.prisma
-code --install-extension eamodio.gitlens
-code --install-extension ms-azuretools.vscode-docker
-code --install-extension humao.rest-client
-```
-
-### 4. Node.js Version Manager (fnm)
-
-We use **fnm** (Fast Node Manager) -- a cross-platform, Rust-based version manager that is fast, simple, and works with `.nvmrc` and `.node-version` files:
-
-```bash
-brew install fnm
-```
-
-**Configure your shell** so fnm activates in every terminal session. Add this line to `~/.zshrc` (or `~/.bashrc` if using bash):
-
-```bash
-# Add to ~/.zshrc:
-eval "$(fnm env --use-on-cd --shell zsh)"
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
 ```
 
 **Reload shell:**
@@ -88,20 +73,17 @@ source ~/.zshrc
 
 **Verify:**
 ```bash
-fnm --version
+nvm --version
 ```
 
-### 5. Node.js
+### 3. Node.js
 
 ```bash
 # Install latest LTS version
-fnm install --lts
+nvm install --lts
 
-# Use it (fnm auto-switches if --use-on-cd is configured)
-fnm use lts-latest
-
-# Set as your default
-fnm default lts-latest
+# Set as default (quotes required in zsh to prevent glob expansion of *)
+nvm alias default 'lts/*'
 
 # Verify
 node --version
@@ -109,33 +91,40 @@ npm --version
 npx --version
 ```
 
-### 6. Package Managers
-
-**pnpm** is the recommended package manager for Next.js projects (fast, disk-efficient, strict). Install it alongside yarn for compatibility with other projects:
-
+**Per-project Node version pinning** - Create a `.nvmrc` file in your project root to ensure consistent Node versions across team members:
 ```bash
-npm install -g pnpm yarn
+# In your project directory
+node --version > .nvmrc
+
+# Then anyone on the team runs:
+nvm use
 ```
 
-> **Note:** pnpm can also be installed standalone via `brew install pnpm` if you prefer not to use npm for it.
+### 4. Alternative Package Managers
 
-> **corepack** is bundled with Node.js and can manage pnpm/yarn versions per-project via `packageManager` in `package.json`. Enable it with:
-> ```bash
-> corepack enable
-> ```
-> Projects using corepack will automatically use the correct package manager version without global installs.
+```bash
+npm install -g yarn pnpm
+```
 
 **Verify:**
 ```bash
-pnpm --version
 yarn --version
+pnpm --version
 ```
 
-### 7. Code Quality & TypeScript
+**Note on Corepack:** Node.js ships with [Corepack](https://nodejs.org/api/corepack.html), which can manage yarn and pnpm versions per-project via the `packageManager` field in `package.json`. To enable it:
+```bash
+corepack enable
+```
+This is useful for teams that need to pin exact package manager versions. When Corepack is enabled and a project specifies `"packageManager": "pnpm@10.33.0"` in `package.json`, running `pnpm` will automatically use that exact version.
+
+### 5. Code Quality Tools
 
 ```bash
 npm install -g prettier eslint typescript
 ```
+
+**Note on major version upgrades:** ESLint and TypeScript release major versions that can have breaking config changes (e.g., ESLint 9→10 changed rule defaults, TypeScript 5→6 tightened type checks). When upgrading globally, check release notes and be aware that existing project configs may need updates. You can pin a specific version if needed: `npm install -g typescript@5.9`.
 
 **Verify:**
 ```bash
@@ -144,7 +133,7 @@ eslint --version
 tsc --version
 ```
 
-### 8. GitHub CLI
+### 6. GitHub CLI
 
 ```bash
 brew install gh
@@ -159,149 +148,64 @@ gh --version
 gh auth status
 ```
 
-### 9. SSH Keys (optional)
-
-> **Skip this if** you're happy using HTTPS for Git. SSH is an alternative authentication method -- useful if you work with multiple Git hosts, need deploy keys, or prefer key-based auth.
-
-Set up SSH for GitHub, Azure DevOps, and remote server access. macOS includes `ssh-agent` and integrates with Keychain automatically.
-
-**Generate a key and add it:**
-```bash
-ssh-keygen -t ed25519 -C "you@example.com"
-ssh-add --apple-use-keychain ~/.ssh/id_ed25519
-```
-
-**Persist across reboots** by adding to `~/.ssh/config`:
-```
-Host *
-  AddKeysToAgent yes
-  UseKeychain yes
-  IdentityFile ~/.ssh/id_ed25519
-```
-
-**Add your public key to GitHub:**
-```bash
-# Copy public key to clipboard
-pbcopy < ~/.ssh/id_ed25519.pub
-
-# Or use GitHub CLI to add it directly
-gh ssh-key add ~/.ssh/id_ed25519.pub --title "Mac Dev Machine"
-```
-
-**Verify:**
-```bash
-ssh -T git@github.com
-```
-
-### 10. CLI Utilities
+### 7. Cloud & Container Tools
 
 ```bash
-brew install ripgrep jq fd bat git-delta tree wget htop watchman
-```
-
-| Tool | What it does |
-|------|-------------|
-| **ripgrep** (`rg`) | Blazing-fast code search (replaces grep) |
-| **jq** | JSON processor for the command line |
-| **fd** | Fast, user-friendly file finder (replaces find) |
-| **bat** | `cat` replacement with syntax highlighting and line numbers |
-| **delta** | Syntax-highlighting pager for git diffs and blame |
-| **tree** | Directory structure visualization |
-| **wget** | File downloader |
-| **htop** | Interactive system monitor |
-| **watchman** | File watching for Jest, Metro, etc. |
-
-> **Tip:** To make delta your default git diff pager, add to your git config:
-> ```bash
-> git config --global core.pager delta
-> git config --global interactive.diffFilter "delta --color-only"
-> git config --global delta.navigate true
-> git config --global merge.conflictStyle zdiff3
-> ```
-
-**Verify:**
-```bash
-rg --version
-jq --version
-fd --version
-bat --version
-delta --version
-watchman --version
-```
-
-### 11. Docker Desktop (optional)
-
-> **Skip this if** you don't need containerized development, databases in containers, or Docker-based deployment workflows. Many Node.js/Next.js projects run fine without Docker. Install it when a project requires it.
-
-```bash
+# Docker Desktop (includes CLI and GUI)
+# Note: This may prompt for your password to set up CLI plugins
 brew install --cask docker
+
+# Google Cloud SDK
+brew install --cask google-cloud-sdk
 ```
 
-**Setup:**
+**Docker setup:**
 - Launch Docker Desktop from Applications folder
 - Wait for Docker daemon to start (Docker icon appears in menu bar)
-- Docker will not work until you manually launch the app
-
-> **Note:** `brew install --cask docker` may prompt for your administrator password. This is normal -- Docker needs to create CLI plugin directories.
+- **Important:** Docker will not work until you manually launch the app
 
 **Verify:**
 ```bash
 docker --version
-docker ps  # Fails if Docker Desktop isn't running
+docker ps  # This will fail if Docker Desktop isn't running
 ```
 
-### 12. Cloud CLIs
-
-**Azure CLI:**
+**gcloud setup:**
 ```bash
-brew install azure-cli
-```
-
-**Setup:**
-```bash
-az login
-az account show
-```
-
-**Google Cloud SDK:**
-```bash
-brew install --cask google-cloud-sdk
-```
-
-**Setup:**
-```bash
+# Initialize and authenticate
 gcloud init
+
+# Verify
+gcloud --version
 gcloud auth list
+
+# Update components (recommended)
 gcloud components update
 ```
 
-> **Note:** gcloud may prompt to install Python 3.13 during updates. If you already have Python 3.11+ installed, you can skip this -- gcloud works fine with newer Python versions.
+**Note:** gcloud may prompt to install Python 3.13 during updates. If you already have Python 3.11+ installed, you can skip this - gcloud works fine with newer Python versions.
 
-**Verify both:**
+### 8. Security
+
+**npm audit** is built into npm and should be part of your regular workflow:
 ```bash
-az --version
-gcloud --version
+# Check for known vulnerabilities in dependencies
+npm audit
+
+# Auto-fix where possible
+npm audit fix
 ```
 
-### 13. AI-Assisted Development CLIs
+Consider adding `npm audit` to your CI pipeline. For more comprehensive scanning, look into [Snyk](https://snyk.io/) or [Socket](https://socket.dev/).
 
-Terminal-based AI coding assistants that run directly in your project directory:
+### 9. Additional Utilities
 
 ```bash
-npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli
-```
+# File watching for Jest, Metro, etc.
+brew install watchman
 
-| Tool | Command | Auth |
-|------|---------|------|
-| **Claude Code** | `claude` | Anthropic API key or Claude subscription |
-| **Codex CLI** | `codex` | OpenAI API key |
-| **Gemini CLI** | `gemini` | Google AI API key or `gcloud auth login` |
-
-**Verify:**
-```bash
-claude --version
-codex --version
-gemini --version
+# Verify
+watchman --version
 ```
 
 ## Complete Tool Reference
@@ -309,29 +213,29 @@ gemini --version
 ### Core Node.js
 | Tool | Install Command | Notes |
 |------|-----------------|-------|
-| node | `fnm install --lts` | Use fnm for version management |
+| node | `nvm install --lts` | Use nvm for version management |
 | npm | Included with Node.js | - |
 | npx | Included with npm | - |
-| fnm | `brew install fnm` | Add `eval` line to `~/.zshrc` after install |
+| nvm | `brew install nvm` | Requires shell configuration |
+| corepack | Included with Node.js | Enable with `corepack enable` |
 
 ### Package Managers
-| Tool | Install Command | Notes |
-|------|-----------------|-------|
-| pnpm | `npm install -g pnpm` | Recommended for Next.js projects |
-| yarn | `npm install -g yarn` | Widely used in existing projects |
+| Tool | Install Command |
+|------|-----------------|
+| yarn | `npm install -g yarn` |
+| pnpm | `npm install -g pnpm` |
 
 ### Version Control & GitHub
 | Tool | Install Command | Post-Install |
 |------|-----------------|--------------|
-| git | `brew install git` | `git config --global user.name "Your Name"` |
-| gh (GitHub CLI) | `brew install gh` | `gh auth login` |
+| git | `brew install git` | Configure: `git config --global user.name "Your Name"` |
+| gh (GitHub CLI) | `brew install gh` | Run: `gh auth login` |
 
-### Editor & Terminal
-| Tool | Install Command |
-|------|-----------------|
-| VS Code | `brew install --cask visual-studio-code` |
-| iTerm2 | `brew install --cask iterm2` |
-| Warp | `brew install --cask warp` |
+### Cloud & Containers
+| Tool | Install Command | Post-Install |
+|------|-----------------|--------------|
+| docker | `brew install --cask docker` | Launch Docker Desktop app |
+| gcloud | `brew install --cask google-cloud-sdk` | Run: `gcloud init` |
 
 ### Code Quality & TypeScript
 | Tool | Install Command |
@@ -340,22 +244,13 @@ gemini --version
 | eslint | `npm install -g eslint` |
 | typescript (tsc) | `npm install -g typescript` |
 
-### Containers & Cloud
-| Tool | Install Command | Post-Install |
-|------|-----------------|--------------|
-| docker (optional) | `brew install --cask docker` | Launch Docker Desktop app |
-| az (Azure CLI) | `brew install azure-cli` | `az login` |
-| gcloud | `brew install --cask google-cloud-sdk` | `gcloud init` |
-
-### CLI Utilities
+### Utilities
 | Tool | Description | Install Command |
 |------|-------------|-----------------|
-| ripgrep (`rg`) | Fast code search | `brew install ripgrep` |
+| ripgrep (rg) | Fast code search | `brew install ripgrep` |
 | jq | JSON processor | `brew install jq` |
+| tree | Directory structure visualization | `brew install tree` |
 | fd | Fast file finder | `brew install fd` |
-| bat | Syntax-highlighting cat | `brew install bat` |
-| delta | Better git diffs | `brew install git-delta` |
-| tree | Directory structure | `brew install tree` |
 | wget | File downloader | `brew install wget` |
 | htop | System monitor | `brew install htop` |
 | watchman | File watching (Jest, Metro) | `brew install watchman` |
@@ -364,80 +259,60 @@ gemini --version
 
 ## Quick Batch Install
 
-After prerequisites (Xcode CLI tools + Homebrew), install everything at once:
+If you prefer to install everything at once (after prerequisites):
 
 ```bash
-# ── Homebrew packages ──
-brew install git fnm gh ripgrep jq fd bat git-delta tree wget htop watchman
-brew install azure-cli
-brew install --cask visual-studio-code google-cloud-sdk
-# brew install --cask docker  # Optional -- uncomment if needed
+# Homebrew packages
+brew install nvm git gh ripgrep jq tree fd wget htop watchman
+brew install --cask docker google-cloud-sdk
 
-# ── Configure fnm in ~/.zshrc ──
-# Add this line:
-#   eval "$(fnm env --use-on-cd --shell zsh)"
-source ~/.zshrc
+# Configure nvm (add to ~/.zshrc, then source it)
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
 
-# ── Install Node.js via fnm ──
-fnm install --lts
-fnm default lts-latest
+# Install Node.js
+nvm install --lts
+nvm alias default 'lts/*'    # Quotes required in zsh
 
-# ── Global npm packages ──
-corepack enable
-npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code @openai/codex @google/gemini-cli
-
-# ── SSH key (interactive) ──
-# ssh-keygen -t ed25519 -C "you@example.com"
-# ssh-add --apple-use-keychain ~/.ssh/id_ed25519
-# gh ssh-key add ~/.ssh/id_ed25519.pub --title "Mac Dev Machine"
+# Global npm packages
+npm install -g yarn pnpm prettier eslint typescript
 ```
 
-## Verified Versions (as of February 2026)
+## Verified Versions (as of March 2026)
 
 These versions are known to work well together:
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Git | 2.53.0 | - |
-| Node.js | 24.13.0 | Latest LTS (Krypton) |
-| npm | 11.7.0 | Included with Node.js 24 |
-| fnm | 1.38.1 | - |
-| pnpm | 10.29.1 | - |
-| Yarn | 1.22.22 | Classic; Yarn 4.x available via `corepack` |
+| Node.js | 24.14.1 | Latest LTS (Krypton). v22.x (Jod) also supported. |
+| npm | 11.11.0 | Bundled with Node.js 24.14.1 |
+| nvm | 0.40.3 | - |
+| Corepack | 0.34.6 | Included with Node.js |
+| Yarn | 1.22.22 | Classic. Modern Yarn (v4+) is per-project via Corepack. |
+| pnpm | 10.33.0 | - |
 | Prettier | 3.8.1 | - |
-| ESLint | 10.0.0 | Flat config is the default |
-| TypeScript | 5.9.3 | - |
-| GitHub CLI | 2.86.0 | - |
-| Azure CLI | 2.83.0 | - |
+| ESLint | 10.1.0 | Major version — check project config compatibility |
+| TypeScript | 6.0.2 | Major version — check project config compatibility |
+| Git | 2.53.0 | Use Homebrew's, not Apple's bundled version |
+| GitHub CLI | 2.89.0 | - |
 | Google Cloud SDK | 555.0.0+ | - |
-| Docker | 29.x | Optional; install when a project requires it |
-| VS Code | 1.109.0 | - |
-| ripgrep | 15.1.0 | - |
-| jq | 1.8.1 | - |
-| fd | 10.3.0 | - |
-| bat | 0.25.0 | - |
-| delta | 0.18.2 | - |
-| Claude Code | 2.1.37 | Anthropic AI coding assistant |
-| Codex CLI | 0.89.0 | OpenAI coding assistant |
-| Gemini CLI | 0.25.2 | Google AI coding assistant |
-| Homebrew | 5.0.x | - |
+| Docker | 29.2.0+ | - |
+| Homebrew | 5.0.13+ | - |
 
-## Optional but Recommended
+## Development Environment
 
-### API Testing
+### Recommended Text Editors/IDEs
 
-For testing REST APIs and GraphQL endpoints during development:
+- **VS Code**: `brew install --cask visual-studio-code`
+- **WebStorm**: `brew install --cask webstorm`
+- **Sublime Text**: `brew install --cask sublime-text`
+- **Vim/Neovim**: `brew install neovim`
 
-- **VS Code REST Client** (already in recommended extensions above) -- lightweight, lives in your editor
-- **Postman**: `brew install --cask postman` -- full-featured GUI for teams
-- **Bruno**: `brew install --cask bruno` -- open-source, Git-friendly alternative to Postman
+### Recommended Terminal Emulators
 
-### Database GUI
-
-If working with databases (Postgres, MySQL, MongoDB, etc.):
-
-- **DBeaver**: `brew install --cask dbeaver-community` -- universal database client, works with all major databases
-- **Prisma Studio**: `npx prisma studio` -- built into Prisma, no extra install needed
+- **iTerm2**: `brew install --cask iterm2`
+- **Warp**: `brew install --cask warp`
+- **Alacritty**: `brew install --cask alacritty`
 
 ## Per-Project Tools (Install Locally)
 
@@ -445,21 +320,17 @@ These should typically be installed as dev dependencies in each project:
 
 ```bash
 npm install --save-dev <tool>
-# or with pnpm:
-pnpm add -D <tool>
 ```
 
 **Common per-project tools:**
-- `typescript` / `tsx` - TypeScript compiler and fast execution
-- `vitest` or `jest` - Testing frameworks
-- `nodemon` - Auto-restart on file changes during development
-- `concurrently` - Run multiple commands in parallel
+- `ts-node` - TypeScript execution
+- `tsx` - Enhanced TypeScript execution
+- `jest` - Testing framework
+- `vitest` - Fast testing framework
+- `nodemon` - Auto-restart on file changes
+- `pm2` - Process manager
+- `concurrently` - Run multiple commands
 - `cross-env` - Cross-platform environment variables
-- `dotenv` - Load environment variables from `.env` files
-- `husky` - Git hooks (pre-commit linting, etc.)
-- `lint-staged` - Run linters only on staged files (pairs with husky)
-- `prisma` - Database ORM (common in Next.js projects)
-- `tailwindcss` - Utility-first CSS framework
 
 ## Verification Script
 
@@ -476,28 +347,19 @@ commands=(
     "node:Node.js"
     "npm:npm"
     "npx:npx"
-    "fnm:fnm"
-    "pnpm:pnpm"
+    "nvm:nvm"
     "yarn:Yarn"
+    "pnpm:pnpm"
     "prettier:Prettier"
     "eslint:ESLint"
     "tsc:TypeScript"
     "gh:GitHub CLI"
     "docker:Docker"
-    "az:Azure CLI"
     "gcloud:Google Cloud SDK"
     "rg:ripgrep"
     "jq:jq"
-    "fd:fd"
-    "bat:bat"
-    "delta:delta"
     "tree:tree"
-    "claude:Claude Code"
-    "codex:Codex CLI"
-    "gemini:Gemini CLI"
-    "watchman:watchman"
-    "ssh:OpenSSH"
-    "code:VS Code"
+    "fd:fd"
 )
 
 for cmd in "${commands[@]}"; do
@@ -515,38 +377,50 @@ done
 
 After installing all tools, verify these key items:
 
-- [ ] **Node.js**: `node --version` shows v24.x or later
-- [ ] **fnm configured**: New terminal sessions auto-detect `.nvmrc` / `.node-version` files
-- [ ] **VS Code**: Opens from terminal with `code .`
-- [ ] **Git configured**: `git config --global user.name` and `git config --global user.email` are set
-- [ ] **SSH key added** (if using SSH): `ssh -T git@github.com` authenticates successfully
+- [ ] **Node.js**: `node --version` shows v24.x (current LTS) or v22.x
+- [ ] **nvm configured**: Shell restarts without "nvm: command not found"
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
-- [ ] **Docker running** (if installed): `docker ps` works without errors (requires Docker Desktop to be launched)
-- [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
-- [ ] **Azure authenticated**: `az account show` shows your subscription
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account
+- [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
+- [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
+- [ ] **Git configured**: Set `git config --global user.name` and `git config --global user.email`
+
+**Optional but recommended:**
+- [ ] Configure Git: `git config --global init.defaultBranch main`
+- [ ] Test Node: Create a simple script and run with `node script.js`
+- [ ] Test package managers: `npm --version`, `yarn --version`, `pnpm --version`
 
 ## Troubleshooting
 
-### fnm command not found
-- Ensure you added `eval "$(fnm env --use-on-cd --shell zsh)"` to `~/.zshrc`
+### nvm command not found
+- Ensure you added the nvm configuration to your shell profile
 - Run `source ~/.zshrc` or restart your terminal
 
-### node command not found (after fnm install)
-- Make sure your shell profile sources fnm (see step 4)
-- Run `fnm use lts-latest` to activate a version in the current session
-- Run `fnm default lts-latest` so it persists across sessions
+### `nvm alias default lts/*` fails with "no matches found"
+- zsh tries to glob-expand the `*` in `lts/*`
+- Fix: quote the argument: `nvm alias default 'lts/*'`
+
+### Global npm packages missing after Node.js upgrade
+- nvm installs global packages per Node version — switching versions means starting fresh
+- When upgrading, use: `nvm install --lts --reinstall-packages-from=current`
+- If you already upgraded without that flag: `npm install -g yarn pnpm prettier eslint typescript`
+
+### `which git` shows /usr/bin/git after brew install
+- macOS bundles an older Git at `/usr/bin/git`
+- Homebrew's Git is at `/opt/homebrew/bin/git` (Apple Silicon) or `/usr/local/bin/git` (Intel)
+- Ensure Homebrew's bin directory appears before `/usr/bin` in your `$PATH`
+- Check with: `echo $PATH | tr ':' '\n' | head -5`
 
 ### Docker installation requires password
 - `brew install --cask docker` may prompt for your administrator password
-- This is normal -- Docker needs to create CLI plugin directories
+- This is normal - Docker needs to create CLI plugin directories
 - Enter your password when prompted to complete installation
 
 ### Docker daemon not running
 - Docker CLI is installed but daemon must be started manually
 - Launch Docker Desktop from Applications folder
 - Wait for Docker icon to appear in menu bar
-- Verify with `docker ps` -- if it fails, Docker Desktop isn't running
+- Verify with `docker ps` - if it fails, Docker Desktop isn't running
 
 ### gcloud prompts to install Python
 - gcloud may suggest installing Python 3.13 during updates
@@ -555,47 +429,75 @@ After installing all tools, verify these key items:
 
 ### Permission errors with npm global install
 - Don't use `sudo` with npm
-- If issues persist, consider using fnm (recommended) or reconfigure npm prefix
+- If issues persist, consider using nvm (recommended) or reconfigure npm prefix
 
 ### Homebrew installation path issues
-- Apple Silicon (M1/M2/M3/M4): Homebrew installs to `/opt/homebrew`
+- Apple Silicon (M1/M2/M3): Homebrew installs to `/opt/homebrew`
 - Intel Macs: Homebrew installs to `/usr/local`
 - Ensure correct path in shell configuration
 
 ## Additional Resources
 
-- [fnm documentation](https://github.com/Schniz/fnm)
+- [nvm documentation](https://github.com/nvm-sh/nvm)
 - [Homebrew documentation](https://docs.brew.sh/)
-- [Node.js releases](https://nodejs.org/en/about/previous-releases)
-- [Next.js documentation](https://nextjs.org/docs)
-- [pnpm documentation](https://pnpm.io)
-- [Azure CLI documentation](https://learn.microsoft.com/en-us/cli/azure/)
-- [Google Cloud CLI documentation](https://cloud.google.com/sdk/docs)
-- [VS Code documentation](https://code.visualstudio.com/docs)
+- [Node.js best practices](https://github.com/goldbergyoni/nodebestpractices)
 
 ## Maintenance
 
 **Keep tools updated:**
 
 ```bash
-# Update Homebrew and packages
+# Update Homebrew and packages (may upgrade many transitive dependencies — expect 20+ packages)
 brew update && brew upgrade
 
 # Update global npm packages
 npm update -g
 
 # Update Node.js to latest LTS
-fnm install --lts
-fnm default lts-latest
-
-# Update Azure CLI
-az upgrade
+# IMPORTANT: Use --reinstall-packages-from to carry over global npm packages from your current version.
+# Without this flag, global packages (prettier, eslint, typescript, etc.) won't be available in the new version.
+nvm install --lts --reinstall-packages-from=current
+nvm alias default 'lts/*'    # Quotes required in zsh
 
 # Update Google Cloud SDK components
 gcloud components update
 ```
 
+**After upgrading Node.js LTS:**
+- New terminal windows will use the new version automatically
+- Existing terminals stay on the old version — run `nvm use default` or restart them
+- If you forgot `--reinstall-packages-from`, reinstall globals: `npm install -g yarn pnpm prettier eslint typescript`
+- The old Node.js version remains installed. Remove it with `nvm uninstall <old-version>` or keep it for projects that need it
+
 **Recommended maintenance schedule:**
 - Weekly: `brew update && brew upgrade`
-- Monthly: Check for Node.js LTS updates with `fnm install --lts`
+- Monthly: Check for Node.js LTS updates with `nvm install --lts`
 - As needed: `npm update -g` for global packages
+- As needed: `gcloud components update` when prompted
+
+## Claude Code CLI Integration
+
+Claude Code reads `CLAUDE.md` files for context about your environment, tools, and conventions. To ensure Claude Code knows about your installed tools and uses them effectively, maintain a global `CLAUDE.md` at `~/.claude/CLAUDE.md`.
+
+**What it does:** Every Claude Code conversation loads this file automatically, so Claude knows what CLI tools are available, which versions/managers you use, and your preferences — without you having to explain each time.
+
+**After installing or updating tools from this guide**, verify `~/.claude/CLAUDE.md` reflects the current state:
+
+```bash
+cat ~/.claude/CLAUDE.md
+```
+
+**Key things to keep listed in `~/.claude/CLAUDE.md`:**
+- Available CLI tools (rg, fd, jq, gh, docker, gcloud, etc.)
+- Node.js version management setup (nvm, .nvmrc, Corepack)
+- Conventions (prefer local devDependencies, run npm audit, etc.)
+- Any project-wide preferences (default package manager, test runner, etc.)
+
+**Scope levels:**
+| File | Scope |
+|------|-------|
+| `~/.claude/CLAUDE.md` | All projects — global tools and preferences |
+| `<project>/CLAUDE.md` | One project — stack, scripts, conventions |
+| `<project>/<subdir>/CLAUDE.md` | Subdirectory — scoped overrides |
+
+For project-specific setups (e.g., "this repo uses pnpm and vitest"), add a `CLAUDE.md` in the project root rather than cluttering the global file.
