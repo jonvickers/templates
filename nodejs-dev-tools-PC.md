@@ -382,13 +382,12 @@ winget install Python.Python.3.12
 winget install Microsoft.VisualStudio.2022.BuildTools
 ```
 
-After installing Build Tools, configure node-gyp to use them by adding to your `~/.npmrc`:
+After installing Build Tools, configure node-gyp to use them via the `GYP_MSVS_VERSION` environment variable (persisted at the user level so it applies in every shell):
 ```powershell
-# Create or edit ~/.npmrc
-Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
+[Environment]::SetEnvironmentVariable('GYP_MSVS_VERSION','2022','User')
 ```
 
-> **Note:** `npm config set msvs_version 2022` no longer works in npm 11+. Setting it directly in `.npmrc` is the correct approach.
+> **Note:** Earlier versions of this guide recommended `msvs_version=2022` in `~/.npmrc`, but npm 11.2+ now warns that custom keys in `.npmrc` are unsupported ([npm/cli#8153](https://github.com/npm/cli/issues/8153)) and will stop working in a future major. `GYP_MSVS_VERSION` is node-gyp's own variable and is unaffected.
 
 **Verify:**
 ```powershell
@@ -570,7 +569,7 @@ fnm default lts-latest
 # ── Global npm packages ──
 corepack enable
 npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code @openai/codex @google/gemini-cli
-Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
+[Environment]::SetEnvironmentVariable('GYP_MSVS_VERSION','2022','User')
 
 # ── SSH key (interactive) ──
 # ssh-keygen -t ed25519 -C "you@example.com"
@@ -810,7 +809,11 @@ After installing all tools, verify these key items:
 ### Native module build failures (node-gyp)
 - Install Python: `winget install Python.Python.3.12`
 - Install Visual Studio Build Tools: `winget install Microsoft.VisualStudio.2022.BuildTools`
-- Add `msvs_version=2022` to `~/.npmrc` (`npm config set` no longer works in npm 11+)
+- Set `GYP_MSVS_VERSION=2022` as a user environment variable:
+  ```powershell
+  [Environment]::SetEnvironmentVariable('GYP_MSVS_VERSION','2022','User')
+  ```
+- **Do not** put `msvs_version=2022` in `~/.npmrc` — npm 11.2+ warns that custom keys there are unsupported and they will stop working in a future major version. `npm config set msvs_version` also no longer works.
 
 ### SSH agent won't start
 - The OpenSSH Authentication Agent service is disabled by default on Windows
