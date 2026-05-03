@@ -22,6 +22,7 @@ Containers: Docker Desktop (optional, not installed -- install when needed)
 - Long paths enabled (registry + git core.longpaths)
 - Windows Defender exclusions configured for code directories and fnm
 - Line endings: core.autocrlf true (CRLF on checkout, LF on commit)
+- Claude Code: `CLAUDE_CODE_USE_POWERSHELL=1` set in `~/.claude/settings.json` so the Bash tool emits PowerShell-native commands (no `&&`, use `$env:VAR`, etc.). Beta flag.
 
 ## Conventions
 
