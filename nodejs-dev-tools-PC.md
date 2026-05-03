@@ -55,7 +55,15 @@ git config --global core.longpaths true
 
 ## Recommended Installation Order
 
-Follow this sequence to avoid dependency issues:
+Follow this sequence to avoid dependency issues.
+
+> **Two friction tips before you start:**
+>
+> 1. **Use silent flags for winget.** Add `--silent --accept-source-agreements --accept-package-agreements` to every `winget install` to skip first-run prompts and license-agreement hangs. The single-tool examples below omit them for readability, but the **Quick Batch Install** section uses them throughout.
+> 2. **PATH only updates in *new* terminal sessions.** After a winget install, `Get-Command rg` or `rg --version` will report "not found" in the same shell — even though the tool installed correctly. Either open a new terminal, or refresh PATH in the current session:
+>    ```powershell
+>    $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+>    ```
 
 ### 1. Windows Terminal
 
@@ -137,6 +145,8 @@ fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
 > ```
 >
 > See **section 11** for the full recommended PowerShell profile (includes Starship, PSReadLine, Terminal-Icons, and more).
+
+> **OneDrive note:** If your Documents folder is OneDrive-synced, `$PROFILE` will resolve to something like `C:\Users\<you>\OneDrive\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`. This is fine — your profile will sync across machines automatically. Just keep using `$PROFILE`; never hard-code the path.
 
 **Restart your terminal**, then verify:
 ```powershell
@@ -301,9 +311,41 @@ A modern shell prompt and quality-of-life PowerShell modules make the terminal s
 
 **Install a Nerd Font** for icon support in Starship and eza. Recommended: **CaskaydiaCove Nerd Font**.
 
-Download from [nerdfonts.com](https://www.nerdfonts.com/font-downloads), install the font, then set it in Windows Terminal: **Settings > Profiles > Defaults > Appearance > Font face**.
+1. Download `CascadiaCode.zip` from [nerdfonts.com](https://www.nerdfonts.com/font-downloads) and extract to `%USERPROFILE%\Downloads\CascadiaCode`.
+2. The archive contains 36 TTFs across three variants — pick what to install:
 
-> **Tip:** You can install Nerd Fonts via `oh-my-posh font install` if you have oh-my-posh, or manually from the website. The font only needs to be set in your terminal emulator, not system-wide.
+   | Variant | Suffix | Use for |
+   |---------|--------|---------|
+   | **Nerd Font Mono** | `NFM` | **Terminals** — strict monospace, glyphs forced to one cell width |
+   | Nerd Font | `NF` | Editors and docs — some glyphs are double-width |
+   | Nerd Font Propo | `NFP` | Proportional — not for terminals |
+
+3. **Install all 36 TTFs per-user** (no admin required, available to every app). Run in PowerShell:
+
+   ```powershell
+   $src = "$env:USERPROFILE\Downloads\CascadiaCode"   # adjust if extracted elsewhere
+   $dst = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
+   $regKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+   New-Item -ItemType Directory -Force -Path $dst | Out-Null
+   if (-not (Test-Path $regKey)) { New-Item -Path $regKey -Force | Out-Null }
+   $shell = New-Object -ComObject Shell.Application
+   foreach ($f in Get-ChildItem -Path $src -Filter *.ttf) {
+       $target = Join-Path $dst $f.Name
+       if (Test-Path $target) { continue }
+       Copy-Item $f.FullName $target -Force
+       $folder = $shell.Namespace($f.DirectoryName)
+       $item = $folder.ParseName($f.Name)
+       $fontName = $folder.GetDetailsOf($item, 21)
+       if ([string]::IsNullOrWhiteSpace($fontName)) { $fontName = [IO.Path]::GetFileNameWithoutExtension($f.Name) }
+       Set-ItemProperty -Path $regKey -Name "$fontName (TrueType)" -Value $target -Type String
+   }
+   ```
+
+   > **Manual alternative:** select all `.ttf` files in File Explorer → right-click → **Install for all users** (requires admin). Same result.
+
+4. **Set it in Windows Terminal:** Ctrl+, → **Profiles → Defaults → Appearance → Font face** → `CaskaydiaCove NFM`. Close and reopen Windows Terminal so the new fonts appear in the dropdown.
+
+> **Why per-user install?** Avoids the admin elevation prompt and keeps fonts scoped to your user profile. They work in every app you launch, including Windows Terminal, VS Code, and browsers.
 
 **Install Starship and PowerShell modules:**
 
@@ -311,11 +353,13 @@ Download from [nerdfonts.com](https://www.nerdfonts.com/font-downloads), install
 winget install Starship.Starship
 
 # PSReadLine (update to latest for predictive IntelliSense)
-Install-Module PSReadLine -Force
+Install-Module PSReadLine -Force -Scope CurrentUser
 
 # Terminal-Icons (file/folder icons in directory listings)
-Install-Module Terminal-Icons -Repository PSGallery -Force
+Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser
 ```
+
+> **Why `-Scope CurrentUser`?** Without it, `Install-Module` defaults to the all-users scope and either prompts or fails when not running as Administrator. Per-user is the right scope for dev tools and avoids the elevation round-trip.
 
 **Configure your PowerShell profile** (`notepad $PROFILE`):
 
@@ -522,30 +566,21 @@ Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name
 Set-Service ssh-agent -StartupType Automatic
 Start-Service ssh-agent
 
-# ── winget packages ──
-winget install Microsoft.WindowsTerminal
-winget install Git.Git
-winget install Microsoft.VisualStudioCode
-winget install Schniz.fnm
-winget install GitHub.cli
-# winget install Docker.DockerDesktop  # Optional -- uncomment if needed
-winget install Python.Python.3.12
-winget install Microsoft.VisualStudio.2022.BuildTools
-winget install Microsoft.AzureCLI
-winget install Google.CloudSDK
-winget install BurntSushi.ripgrep.MSVC
-winget install jqlang.jq
-winget install sharkdp.fd
-winget install sharkdp.bat
-winget install dandavison.delta
-winget install gnuwin32.tree
-winget install junegunn.fzf
-winget install eza-community.eza
-winget install tldr-pages.tlrc
-winget install Starship.Starship
-# winget install ajeetdsouza.zoxide  # Optional -- smarter cd
+# ── winget packages (silent + auto-accept agreements) ──
+$wingetArgs = '--silent --accept-source-agreements --accept-package-agreements'
+$packages = @(
+    'Microsoft.WindowsTerminal','Git.Git','Microsoft.VisualStudioCode','Schniz.fnm','GitHub.cli',
+    # 'Docker.DockerDesktop',          # Optional -- uncomment if needed
+    'Python.Python.3.12','Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.AzureCLI','Google.CloudSDK',
+    'BurntSushi.ripgrep.MSVC','jqlang.jq','sharkdp.fd','sharkdp.bat','dandavison.delta',
+    'gnuwin32.tree','junegunn.fzf','eza-community.eza','tldr-pages.tlrc','Starship.Starship'
+    # 'ajeetdsouza.zoxide'             # Optional -- smarter cd
+)
+foreach ($p in $packages) { winget install --id $p $wingetArgs.Split(' ') }
 
-# RESTART YOUR TERMINAL after the above installs
+# Refresh PATH in the current session so the rest of this script can find new tools
+$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
 
 # ── Git configuration ──
 git config --global user.name "Your Name"
@@ -555,9 +590,9 @@ git config --global core.autocrlf true
 git config --global core.longpaths true
 git config --global credential.helper manager
 
-# ── PowerShell modules ──
-Install-Module PSReadLine -Force
-Install-Module Terminal-Icons -Repository PSGallery -Force
+# ── PowerShell modules (CurrentUser scope avoids admin prompt) ──
+Install-Module PSReadLine -Force -Scope CurrentUser
+Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser
 
 # ── Configure PowerShell profile ──
 # Add to $PROFILE (see section 11 for full profile):
@@ -658,6 +693,17 @@ Save this as `verify-setup.ps1` and run to check all installations:
 ```powershell
 Write-Host "Checking development environment..." -ForegroundColor Cyan
 Write-Host ""
+
+# Refresh PATH from the registry so tools installed earlier in this session are visible
+$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+
+# Activate fnm so Node and npm-global packages (under fnm's per-version dir) are on PATH.
+# Without this, node/npm/pnpm/yarn/prettier/eslint/tsc and any `npm install -g`-installed
+# CLIs will falsely report "NOT INSTALLED" when this script runs without the user's profile.
+if (Get-Command fnm -ErrorAction SilentlyContinue) {
+    fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+    fnm use default 2>&1 | Out-Null
+}
 
 $commands = @(
     @{cmd="git"; args="--version"; name="Git"},
