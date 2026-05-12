@@ -7,11 +7,67 @@ Complete guide for setting up a Windows development environment for Node.js and 
 Before starting, ensure you have:
 
 1. **Windows 10/11**
-2. **PowerShell** (run as Administrator for installations)
+2. **Windows PowerShell 5.1** (built in) — use it for the initial setup; install **PowerShell 7** (below) and switch your terminals to it once it's set up. Several steps need an **elevated** ("Run as Administrator") session — they're marked.
 3. **winget** (Windows Package Manager, included with Windows 10 1709+ and Windows 11)
    ```powershell
    winget --version
    ```
+
+### Install PowerShell 7 (recommended)
+
+Windows ships with **Windows PowerShell 5.1** — frozen, security fixes only. **PowerShell 7** (`pwsh`) is the actively-developed successor: faster, supports `&&`/`||` chaining and ternary/null-coalescing operators, handles quoted arguments to native programs (e.g. `git.exe`) far more reliably, and is the same shell on macOS/Linux.
+
+**Option A — MSI, machine-wide (recommended for a dev workstation).** Installs `pwsh.exe` to `C:\Program Files\PowerShell\7\` and adds that to the system `PATH`. No MSIX sandboxing, and it plays nicely with tooling that hard-codes that path. Needs admin — one UAC prompt:
+
+```powershell
+$v = '7.6.1'   # check latest at https://github.com/PowerShell/PowerShell/releases
+curl.exe -L -o "$env:TEMP\pwsh.msi" "https://github.com/PowerShell/PowerShell/releases/download/v$v/PowerShell-$v-win-x64.msi"
+Start-Process msiexec.exe -ArgumentList '/i', "$env:TEMP\pwsh.msi", '/quiet', 'ADD_PATH=1', 'REGISTER_MANIFEST=1', 'USE_MU=1', 'ENABLE_MU=1' -Verb RunAs -Wait
+```
+
+> **`winget install Microsoft.PowerShell` does NOT give you this.** As of 7.6.x the `Microsoft.PowerShell` winget package ships only the **Microsoft Store / MSIX bundle** — installs per-user under `C:\Program Files\WindowsApps\…`, with `pwsh.exe` reached via an app-execution-alias stub (so `(Get-Command pwsh).Source` points at a 0-byte stub, not `C:\Program Files\PowerShell\7\`). No admin needed and it's officially supported, but it has MSIX-runtime quirks and a couple of tools choke on the alias stub — prefer the MSI on a dev box. (Also: `winget install Microsoft.PowerShell --scope machine` just errors with "no applicable installer", because there's no MSI in that manifest.) To move from the Store build to the MSI: `winget uninstall Microsoft.PowerShell`, then run the MSI commands above — and afterwards **restart Windows Terminal and VS Code** so they re-discover `pwsh`. (They cache the path of whichever pwsh existed when they first detected it; uninstalling the Store build leaves the old `…\WindowsApps\…\pwsh.exe` path dangling and you'll get `0x80070002 — the system cannot find the file specified` until they re-scan. If a restart doesn't fix it, pin the Windows Terminal PowerShell profile to an explicit `"commandline": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\""`.)
+
+**Option B — Microsoft Store / winget (no admin, accepts the MSIX quirks):**
+
+```powershell
+winget install Microsoft.PowerShell
+```
+
+Either way, the install is **side-by-side** with Windows PowerShell 5.1. **Open a fresh terminal afterward** so `pwsh` is on `PATH`. Don't try to remove 5.1 — it's a built-in Windows component, and a few legacy modules still need it (load them from `pwsh` with `Import-Module <name> -UseWindowsPowerShell` if you ever hit one).
+
+**Make PowerShell 7 your default shell:**
+
+- **Windows Terminal:** Ctrl+, → **Startup → Default profile → PowerShell** (the black `>_` icon — *not* the navy "Windows PowerShell", which is 5.1). If "PowerShell" isn't in the list yet, restart Windows Terminal — it auto-discovers `pwsh` on launch.
+- **VS Code:** Settings → `terminal.integrated.defaultProfile.windows` → **PowerShell** (VS Code labels pwsh 7 "PowerShell" and 5.1 "Windows PowerShell").
+- Things that explicitly launch `powershell.exe` — scheduled tasks, some installers, Claude Code's PowerShell tooling — keep using 5.1. That's fine; call `pwsh.exe` explicitly wherever you want 7.
+
+**Nothing migrates automatically — PowerShell 7 keeps everything in its own locations:**
+
+| Thing | Windows PowerShell 5.1 | PowerShell 7 | How to bring it over |
+|-------|------------------------|--------------|----------------------|
+| `$PROFILE` script | `…\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` | `…\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` | Copy the contents, or keep one canonical copy and dot-source it (shim below) |
+| Modules (`Install-Module -Scope CurrentUser`) | `…\Documents\WindowsPowerShell\Modules` | `…\Documents\PowerShell\Modules` | **Re-run the `Install-Module` commands from inside `pwsh`** — don't copy module folders between the two |
+| PSReadLine history | `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt` | `%APPDATA%\Microsoft\PowerShell\PSReadLine\ConsoleHost_history.txt` (note: no `Windows\`) | Optional — copy the file across once |
+| Execution policy | per-shell | per-shell (pwsh defaults to `RemoteSigned` on Windows, not `Restricted`) | Re-run the `Set-ExecutionPolicy` step below from `pwsh` |
+
+> If your Documents folder is OneDrive-redirected, *both* shells' profile and module paths live under `…\OneDrive\Documents\…`. `[Environment]::GetFolderPath('MyDocuments')` resolves the correct base for either shell — never hard-code the path.
+
+**Keep one profile (recommended).** Put the real profile in the pwsh location and make the 5.1 profile a thin shim that loads it:
+
+```powershell
+# In pwsh — create the PowerShell 7 profile file if it doesn't exist yet:
+if (-not (Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
+
+# In the Windows PowerShell 5.1 profile (run `notepad $PROFILE` from powershell.exe), put ONLY:
+$pwsh7Profile = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Microsoft.PowerShell_profile.ps1'
+if (Test-Path $pwsh7Profile) { . $pwsh7Profile }
+```
+
+> **Migrating a machine that already has a 5.1 profile?** Back it up first (`Copy-Item $PROFILE "$PROFILE.bak-pre-pwsh7"` from `powershell.exe`), move its contents into the pwsh 7 profile, *then* overwrite the 5.1 one with the shim above.
+
+Then everything in **section 11** (fnm, Starship, PSReadLine, Terminal-Icons) goes in the **pwsh** profile, and you maintain it in one place. The `fnm env --shell powershell` line and the Starship/zoxide init lines run unchanged in both 5.1 and 7. One behavior change to know: **pwsh 7 on Windows drops the `curl` and `wget` aliases** that 5.1 has — `curl` runs the real `curl.exe` (which this guide installs), which is what you want for dev work, but fix any profile script that assumed `curl` meant `Invoke-WebRequest`.
+
+> **Claude Code note:** Claude Code's built-in PowerShell tooling may still invoke `powershell.exe` (5.1) even with `pwsh` installed, and 5.1 mangles quoted/multi-line arguments handed to native programs — so a multi-line `git commit -m` can still fail there. Use `git commit -F <file>` as the workaround.
 
 ### Set PowerShell Execution Policy
 
@@ -20,6 +76,8 @@ Developer workstations should allow script execution. Run PowerShell **as Admini
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser
 ```
+
+> If you installed PowerShell 7, run this from `pwsh` as well — execution policy is **per-shell**. (pwsh 7 on Windows already defaults to `RemoteSigned`, which is enough to run your own profile; `Unrestricted` just matches the 5.1 setting above.)
 
 ### Windows Defender Exclusions
 
@@ -31,9 +89,15 @@ Add-MpPreference -ExclusionPath "C:\Users\<YourUser>\Code"
 
 # Exclude fnm's Node.js installations
 Add-MpPreference -ExclusionPath "$env:APPDATA\fnm"
+
+# Exclude the Claude Code install dir — the native build embeds CLI tools (including ripgrep,
+# a known Defender false-positive) and extracts them at runtime; quarantining one silently
+# breaks features like file search.  (Installed Claude Code via npm instead? Exclude
+# "$env:APPDATA\npm\node_modules\@anthropic-ai" as well.)
+Add-MpPreference -ExclusionPath "$env:USERPROFILE\.local"
 ```
 
-> **Why?** `node_modules` folders contain thousands of small files. Defender scanning each one on every read adds substantial overhead to installs and builds.
+> **Why?** `node_modules` folders contain thousands of small files — Defender scanning each one on every read adds substantial overhead to installs and builds. And large bundled binaries (ripgrep especially) periodically trip false positives, so excluding the dirs that hold them avoids mysterious "tool not available" breakage.
 
 **Verify:**
 ```powershell
@@ -283,7 +347,10 @@ winget install tldr-pages.tlrc
 | **tlrc** (`tldr`) | Fast tldr client -- simplified, example-based command help |
 | **zoxide** (`z`) (optional) | Smarter `cd` that learns your most-used directories |
 
-> **Note — ripgrep powers Claude Code's file search.** If `rg` isn't on `PATH` when Claude Code starts, it prints `Ripgrep is not available` and falls back to a slower built-in file scanner. Installing `BurntSushi.ripgrep.MSVC` fixes it — but a `claude` session (or any terminal) that was already open when you installed it captured the *old* `PATH`, so quit and relaunch `claude` from a fresh terminal to clear the warning. WSL and Git-Bash shells don't inherit the Windows user `PATH` at all, so if you run Claude Code from one of those, install ripgrep inside that environment too.
+> **Note — ripgrep powers Claude Code's file search.** Claude Code tries its own bundled ripgrep first, then falls back to `rg` on `PATH`; if neither works it prints `Ripgrep is not available` and uses a slower built-in scanner. To make this stick for good:
+> - **Keep `rg` on `PATH` in a *stable* spot.** WinGet installs `rg.exe` into a *versioned* folder (`…\WinGet\Packages\…ripgrep-<version>-…`) that moves on every update. Drop a copy somewhere that's always on `PATH` and doesn't move — e.g. `%USERPROFILE%\.local\bin`, where `claude.exe` already lives: `Copy-Item (Get-Command rg).Source "$env:USERPROFILE\.local\bin\rg.exe"`.
+> - **Exclude the Claude Code install dir from Defender** (see the Defender Exclusions section above) — Defender occasionally quarantines `rg.exe` as a false positive, including the copy Claude bundles.
+> - **Still warning in some session?** That session's `claude` process was launched with a stale or stripped `PATH` (a terminal opened before `rg` was on `PATH`, or something that starts `claude` with a minimal environment) — a process keeps the `PATH` it started with. Quit it, open a **fresh Windows Terminal**, and start `claude` there; run `/doctor` inside Claude Code to see what it found, or `claude update` to refresh the bundled tools. WSL/Git-Bash shells don't inherit the Windows user `PATH`, so install ripgrep inside that environment too if you run Claude Code from one.
 
 > **Tip:** To make delta your default git diff pager, add to your git config:
 > ```powershell
@@ -351,10 +418,12 @@ A modern shell prompt and quality-of-life PowerShell modules make the terminal s
 
 **Install Starship and PowerShell modules:**
 
+> **Run the `Install-Module` lines from inside whichever PowerShell you'll actually use.** `Install-Module` installs into the *running* shell's user module path, and Windows PowerShell 5.1 and PowerShell 7 have separate ones (see [Install PowerShell 7](#install-powershell-7-recommended) above). If `pwsh` is your shell, run them in `pwsh`. pwsh 7 already bundles a modern PSReadLine — so `Install-Module PSReadLine` there is optional, and if it errors with *"version X currently in use, retry after closing applications"* just skip it; Terminal-Icons is the one that actually needs installing.
+
 ```powershell
 winget install Starship.Starship
 
-# PSReadLine (update to latest for predictive IntelliSense)
+# PSReadLine (update to latest for predictive IntelliSense; already current in pwsh 7)
 Install-Module PSReadLine -Force -Scope CurrentUser
 
 # Terminal-Icons (file/folder icons in directory listings)
@@ -365,17 +434,31 @@ Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser
 
 **Configure your PowerShell profile** (`notepad $PROFILE`):
 
+> **PowerShell 7?** `$PROFILE` points at a *different* file in `pwsh` (`…\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`) than in Windows PowerShell 5.1 (`…\WindowsPowerShell\…`). Put the config below in the **pwsh** profile and make the 5.1 profile a one-line shim that dot-sources it — recipe in [Install PowerShell 7](#install-powershell-7-recommended) above.
+
 ```powershell
 # Initialize fnm (Node.js version manager)
 fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
 
-# Shell modules
+# File/folder icons in directory listings
 Import-Module Terminal-Icons
 
-# PSReadLine enhancements
-Set-PSReadLineOption -PredictionSource History
-Set-PSReadLineOption -Colors @{ InlinePrediction = '#717171' }
-Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+# PSReadLine: menu completion + predictive IntelliSense (interactive consoles only).
+# This file is the canonical profile and gets dot-sourced by the 5.1 profile, so guard the calls:
+#  - Skip entirely when output is redirected (e.g. `pwsh -Command ...` with captured output) —
+#    enabling prediction throws there ("console output doesn't support virtual terminal processing").
+#  - Prediction needs PSReadLine 2.2.0+ (pwsh 7 bundles a recent build; 5.1 ships 2.0.0 —
+#    run `Install-Module PSReadLine -Force` to update it). Check the loaded module, then fall
+#    back to -ListAvailable.
+if (-not [Console]::IsOutputRedirected) {
+    Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+    $psrlVersion = (Get-Module PSReadLine).Version
+    if (-not $psrlVersion) { $psrlVersion = (Get-Module PSReadLine -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1).Version }
+    if ($psrlVersion -ge [version]'2.2.0') {
+        Set-PSReadLineOption -PredictionSource History
+        Set-PSReadLineOption -Colors @{ InlinePrediction = '#717171' }
+    }
+}
 
 # Initialize zoxide (if installed -- optional)
 # Invoke-Expression (& { (zoxide init powershell | Out-String) })
@@ -492,7 +575,7 @@ codex --version
 gemini --version
 ```
 
-> **Note:** Claude Code shells out to ripgrep (`rg`, installed in step 10) for file search. If you ever see `Ripgrep is not available` in Claude Code, `rg` wasn't on `PATH` when that session launched — make sure `BurntSushi.ripgrep.MSVC` is installed, then relaunch `claude` from a new terminal. See step 10.
+> **Note:** Claude Code uses ripgrep (`rg`, installed in step 10) for file search. If you ever see `Ripgrep is not available`, Claude couldn't use its bundled `rg` *and* didn't find one on the `PATH` that the `claude` process started with — make sure `BurntSushi.ripgrep.MSVC` is installed with a copy on a stable `PATH` dir, relaunch `claude` from a fresh terminal, and run `/doctor` to confirm. See **step 10** for the durable fix.
 
 ## Complete Tool Reference
 
@@ -521,6 +604,7 @@ gemini --version
 |------|-----------------|
 | VS Code | `winget install Microsoft.VisualStudioCode` |
 | Windows Terminal | `winget install Microsoft.WindowsTerminal` |
+| PowerShell 7 (`pwsh`) | `winget install Microsoft.PowerShell` |
 
 ### Code Quality & TypeScript
 | Tool | Install Command |
@@ -570,6 +654,14 @@ Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name
 Set-Service ssh-agent -StartupType Automatic
 Start-Service ssh-agent
 
+# ── PowerShell 7 (MSI, machine-wide -> C:\Program Files\PowerShell\7\) ──
+# Note: `winget install Microsoft.PowerShell` only ships the Store/MSIX bundle (pwsh behind an
+# alias stub, MSIX sandboxing). This MSI is the dev-workstation build. We're already elevated.
+$pwshVer = '7.6.1'   # check https://github.com/PowerShell/PowerShell/releases
+curl.exe -L -o "$env:TEMP\pwsh.msi" "https://github.com/PowerShell/PowerShell/releases/download/v$pwshVer/PowerShell-$pwshVer-win-x64.msi"
+Start-Process msiexec.exe -ArgumentList '/i', "$env:TEMP\pwsh.msi", '/quiet', '/norestart', 'ADD_PATH=1', 'REGISTER_MANIFEST=1', 'USE_MU=1', 'ENABLE_MU=1' -Wait
+Remove-Item "$env:TEMP\pwsh.msi" -ErrorAction SilentlyContinue
+
 # ── winget packages (silent + auto-accept agreements) ──
 $wingetArgs = '--silent --accept-source-agreements --accept-package-agreements'
 $packages = @(
@@ -594,12 +686,27 @@ git config --global core.autocrlf true
 git config --global core.longpaths true
 git config --global credential.helper manager
 
-# ── PowerShell modules (CurrentUser scope avoids admin prompt) ──
-Install-Module PSReadLine -Force -Scope CurrentUser
-Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser
+# ── PowerShell modules into pwsh 7's user module path ──
+# Modules install into the *running* shell's module path, and 5.1 and pwsh 7 keep separate
+# ones. This script runs in 5.1, so install into pwsh 7 via `pwsh -File` (passing -Command
+# from 5.1 mangles args like `-Scope CurrentUser`). Terminal-Icons is required; pwsh 7
+# already bundles a modern PSReadLine so its (re)install is best-effort.
+$pwsh7 = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+$modScript = "$env:TEMP\pwsh7-modules.ps1"
+@(
+  'Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser'
+  'try { Install-Module PSReadLine -Force -Scope CurrentUser -SkipPublisherCheck -AllowClobber } catch {}'
+) | Set-Content -Encoding utf8 $modScript
+& $pwsh7 -NoProfile -File $modScript
+Remove-Item $modScript -ErrorAction SilentlyContinue
+# If you keep using PowerShell 5.1 too, also update its old PSReadLine:
+#   powershell.exe -Command "Install-Module PSReadLine -Force -Scope CurrentUser -SkipPublisherCheck"
 
-# ── Configure PowerShell profile ──
-# Add to $PROFILE (see section 11 for full profile):
+# ── PowerShell profile + each shell's default profile (manual, one-time) ──
+# - Put the section-11 profile in pwsh 7's $PROFILE; make 5.1's $PROFILE a one-line shim that
+#   dot-sources it (recipe in the "Install PowerShell 7" section).
+# - Make pwsh 7 the default profile in Windows Terminal (Ctrl+, -> Startup -> Default profile)
+#   and in VS Code (set terminal.integrated.defaultProfile.windows to "PowerShell").
 
 # ── Install Node.js via fnm ──
 fnm install --lts
@@ -622,6 +729,7 @@ These versions are known to work well together:
 
 | Tool | Version | Notes |
 |------|---------|-------|
+| PowerShell 7 (`pwsh`) | 7.6.x | MSI (machine-wide) recommended; side-by-side with built-in Windows PowerShell 5.1 |
 | Git | 2.53.0 | - |
 | Node.js | 24.13.0 | Latest LTS (Krypton) |
 | npm | 11.7.0 | Included with Node.js 24 |
@@ -710,6 +818,7 @@ if (Get-Command fnm -ErrorAction SilentlyContinue) {
 }
 
 $commands = @(
+    @{cmd="pwsh"; args="--version"; name="PowerShell 7"},
     @{cmd="git"; args="--version"; name="Git"},
     @{cmd="node"; args="--version"; name="Node.js"},
     @{cmd="npm"; args="--version"; name="npm"},
@@ -842,6 +951,19 @@ After installing all tools, verify these key items:
 - Many winget installations require a terminal restart to update PATH
 - If a command isn't found after install, close and reopen your terminal
 - For persistent issues, check System Environment Variables (Win+R > `sysdm.cpl` > Advanced > Environment Variables)
+
+### "Ripgrep is not available" in Claude Code
+- Claude Code couldn't use its bundled ripgrep **and** didn't find `rg` on the `PATH` the `claude` process was launched with. It's harmless — a slower built-in file scanner takes over — but to fix it for good:
+  - Install ripgrep (`winget install BurntSushi.ripgrep.MSVC`) and put a copy on a stable `PATH` dir: `Copy-Item (Get-Command rg).Source "$env:USERPROFILE\.local\bin\rg.exe"` (`~/.local/bin` is where `claude.exe` already lives, so it's on `PATH` wherever `claude` runs).
+  - Exclude the Claude Code install dir (`%USERPROFILE%\.local`) from Defender so it can't quarantine the bundled `rg.exe` (a known false positive).
+  - Quit the affected `claude` session and relaunch from a **fresh Windows Terminal** — a process keeps the `PATH` it started with. Run `/doctor` in Claude Code to see what it found, or `claude update` to refresh bundled tools.
+  - WSL/Git-Bash shells don't inherit the Windows user `PATH` — install ripgrep inside that environment if you run Claude Code there.
+  - See **step 10** for the full note.
+
+### `0x80070002 — the system cannot find the file specified` launching `pwsh.exe` (Windows Terminal / VS Code)
+- The terminal cached the path of a PowerShell 7 install that no longer exists. This happens when pwsh 7 was installed via the **Microsoft Store / MSIX bundle** (command line points at `…\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe`), the terminal auto-detected it, and then it was uninstalled — e.g. when switching to the MSI build.
+- **Fix:** fully restart Windows Terminal (close all windows) and VS Code so they re-scan and pick up the current `pwsh`. If that doesn't take, pin the path explicitly — in Windows Terminal's `settings.json`, add `"commandline": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo"` to the profile whose `source` is `Windows.Terminal.PowershellCore`.
+- **Avoid it on a new machine** by installing PowerShell 7 from the **MSI** in the first place (see "Install PowerShell 7"), not the Store/MSIX build — then the only `pwsh` path the terminals ever see is the stable `C:\Program Files\PowerShell\7\pwsh.exe`.
 
 ### Execution policy blocks PowerShell scripts
 - Developer workstations should use `Unrestricted` to avoid friction:
