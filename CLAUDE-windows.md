@@ -23,6 +23,7 @@ Containers: Docker Desktop (optional, not installed -- install when needed)
 - Windows Defender exclusions configured for code directories and fnm
 - Line endings: core.autocrlf true (CRLF on checkout, LF on commit)
 - Claude Code: `CLAUDE_CODE_USE_POWERSHELL=1` set in `~/.claude/settings.json` so the Bash tool emits PowerShell-native commands (no `&&`, use `$env:VAR`, etc.). Beta flag.
+- Claude Code calls `rg` (ripgrep, listed under CLI utilities above) for file search; if it isn't on `PATH` at launch, Claude Code prints `Ripgrep is not available` and uses a slow built-in fallback. After any `PATH` change, relaunch `claude` from a fresh terminal so the change is picked up (already-open sessions keep their old `PATH`). WSL/Git-Bash shells don't inherit the Windows user `PATH` — install ripgrep there too if you run Claude Code from one.
 
 ## Conventions
 

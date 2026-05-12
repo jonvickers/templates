@@ -283,6 +283,8 @@ winget install tldr-pages.tlrc
 | **tlrc** (`tldr`) | Fast tldr client -- simplified, example-based command help |
 | **zoxide** (`z`) (optional) | Smarter `cd` that learns your most-used directories |
 
+> **Note — ripgrep powers Claude Code's file search.** If `rg` isn't on `PATH` when Claude Code starts, it prints `Ripgrep is not available` and falls back to a slower built-in file scanner. Installing `BurntSushi.ripgrep.MSVC` fixes it — but a `claude` session (or any terminal) that was already open when you installed it captured the *old* `PATH`, so quit and relaunch `claude` from a fresh terminal to clear the warning. WSL and Git-Bash shells don't inherit the Windows user `PATH` at all, so if you run Claude Code from one of those, install ripgrep inside that environment too.
+
 > **Tip:** To make delta your default git diff pager, add to your git config:
 > ```powershell
 > git config --global core.pager delta
@@ -489,6 +491,8 @@ claude --version
 codex --version
 gemini --version
 ```
+
+> **Note:** Claude Code shells out to ripgrep (`rg`, installed in step 10) for file search. If you ever see `Ripgrep is not available` in Claude Code, `rg` wasn't on `PATH` when that session launched — make sure `BurntSushi.ripgrep.MSVC` is installed, then relaunch `claude` from a new terminal. See step 10.
 
 ## Complete Tool Reference
 
