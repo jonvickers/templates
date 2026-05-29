@@ -438,10 +438,12 @@ Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser
 
 ```powershell
 # Initialize fnm (Node.js version manager)
-fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+if (Get-Command fnm -ErrorAction SilentlyContinue) {
+    fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+}
 
 # File/folder icons in directory listings
-Import-Module Terminal-Icons
+if (Get-Module -ListAvailable Terminal-Icons) { Import-Module Terminal-Icons }
 
 # PSReadLine: menu completion + predictive IntelliSense (interactive consoles only).
 # This file is the canonical profile and gets dot-sourced by the 5.1 profile, so guard the calls:
@@ -461,13 +463,15 @@ if (-not [Console]::IsOutputRedirected) {
 }
 
 # Initialize zoxide (if installed -- optional)
-# Invoke-Expression (& { (zoxide init powershell | Out-String) })
+# if (Get-Command zoxide -ErrorAction SilentlyContinue) { Invoke-Expression (& { (zoxide init powershell | Out-String) }) }
 
 # Initialize Starship prompt (must be last)
-Invoke-Expression (&starship init powershell)
+if (Get-Command starship -ErrorAction SilentlyContinue) { Invoke-Expression (&starship init powershell) }
 ```
 
 > **Why last?** Starship replaces the prompt function, so it must be initialized after other tools that modify the prompt.
+
+> **Why the `if (Get-Command …)` guards?** This profile roams via OneDrive (see the OneDrive note in step 4), but the tools it calls — fnm, Terminal-Icons, Starship — install **per-machine** and don't. On a fresh or newly-roamed machine the synced profile would otherwise load before those tools exist and **throw at startup** (the classic `Import-Module : Terminal-Icons … no valid module file was found`). Guarding each call makes a missing tool a no-op instead of an error. For a profile that goes one step further and **auto-installs** the missing pieces on first launch, see [Roaming & self-healing across machines](#16-roaming--self-healing-across-machines-optional).
 
 **Customize Starship** (optional): Create `~/.config/starship.toml` to configure which modules appear in your prompt. Starship auto-detects Node.js, Git, Python, Docker, and many more. See [starship.rs/config](https://starship.rs/config/) for all options.
 
@@ -576,6 +580,42 @@ gemini --version
 ```
 
 > **Note:** Claude Code uses ripgrep (`rg`, installed in step 10) for file search. If you ever see `Ripgrep is not available`, Claude couldn't use its bundled `rg` *and* didn't find one on the `PATH` that the `claude` process started with — make sure `BurntSushi.ripgrep.MSVC` is installed with a copy on a stable `PATH` dir, relaunch `claude` from a fresh terminal, and run `/doctor` to confirm. See **step 10** for the durable fix.
+
+### 16. Roaming & Self-Healing Across Machines (optional)
+
+If you run more than one Windows workstation, OneDrive can keep them identical — with two gotchas worth engineering around. Ready-to-use example files live in **[`windows-powershell/`](windows-powershell/)** (and its [README](windows-powershell/README.md)).
+
+**What roams on its own, and what doesn't:**
+
+| Layer | Roams? | Why |
+|-------|--------|-----|
+| PowerShell `$PROFILE` | ✅ | Under OneDrive-redirected `…\Documents\PowerShell\` (see step 4) |
+| PowerShell modules (`-Scope CurrentUser`) | ✅ | Same OneDrive-redirected Documents path |
+| The **tools** the profile calls (fnm, Starship, Nerd Font) | ❌ | winget/font installs are per-machine |
+| Windows Terminal `settings.json` | ❌ | Lives in `%LOCALAPPDATA%`, which never roams |
+
+#### Self-healing profile
+
+Because the profile roams but its tools don't, a fresh machine loads the synced profile before the tools exist and errors at startup. Two fixes, both shown in **[`windows-powershell/Microsoft.PowerShell_profile.ps1`](windows-powershell/Microsoft.PowerShell_profile.ps1)**:
+
+- **Guard every external-tool call** (`if (Get-Command … )` / `Get-Module -ListAvailable`) so a missing tool is skipped, not fatal. (The step 11 profile above already does this.)
+- **`Invoke-ProfileBootstrap`** — auto-installs anything missing (Terminal-Icons, Starship, fnm, Nerd Font). It runs **once per machine** (sentinel in `%LOCALAPPDATA%`, so it doesn't re-run on every shell and doesn't roam), **interactive sessions only**, and can be re-triggered anytime with **`Repair-Profile`**. The first launch on a new machine installs the missing pieces (may take a minute), then it's instant.
+
+#### Roaming Windows Terminal settings
+
+`settings.json` won't sync on its own. Point it at a single shared copy in OneDrive with a symlink, using **[`windows-powershell/Link-WindowsTerminalSettings.ps1`](windows-powershell/Link-WindowsTerminalSettings.ps1)**:
+
+```powershell
+# FIRST machine — seed the shared copy from this machine, then link (run elevated):
+.\Link-WindowsTerminalSettings.ps1 -Seed
+
+# EVERY OTHER machine — link to the already-synced copy (run elevated):
+.\Link-WindowsTerminalSettings.ps1
+```
+
+The symlink is a local filesystem object, so it can't itself roam — run the script **once per machine**, from an **elevated** shell (creating a symlink needs admin or Developer Mode). A clean starting `settings.json` (PowerShell 7 as default, Nerd Font) is in **[`windows-powershell/windows-terminal-settings.example.json`](windows-powershell/windows-terminal-settings.example.json)**.
+
+> **Don't hard-code OneDrive paths.** Use `[Environment]::GetFolderPath('MyDocuments')` (resolves the redirected Documents base for both shells) and `$env:OneDrive` — these adapt whether or not Known Folder redirection is on.
 
 ## Complete Tool Reference
 
@@ -964,6 +1004,13 @@ After installing all tools, verify these key items:
 - The terminal cached the path of a PowerShell 7 install that no longer exists. This happens when pwsh 7 was installed via the **Microsoft Store / MSIX bundle** (command line points at `…\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe`), the terminal auto-detected it, and then it was uninstalled — e.g. when switching to the MSI build.
 - **Fix:** fully restart Windows Terminal (close all windows) and VS Code so they re-scan and pick up the current `pwsh`. If that doesn't take, pin the path explicitly — in Windows Terminal's `settings.json`, add `"commandline": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo"` to the profile whose `source` is `Windows.Terminal.PowershellCore`.
 - **Avoid it on a new machine** by installing PowerShell 7 from the **MSI** in the first place (see "Install PowerShell 7"), not the Store/MSIX build — then the only `pwsh` path the terminals ever see is the stable `C:\Program Files\PowerShell\7\pwsh.exe`.
+
+### PowerShell profile errors at startup on a new or roamed machine
+- Symptom: a new terminal opens with an error like `Import-Module : The specified module 'Terminal-Icons' was not loaded because no valid module file was found`, or `starship`/`fnm` "is not recognized". The slow `Loading personal and system profiles took NNNNms` line often appears too.
+- **Cause:** your `$PROFILE` roamed via OneDrive, but the tool it references (the Terminal-Icons module, Starship, fnm, …) isn't installed on *this* machine yet — module/tool installs are per-machine and don't roam.
+- **Quick fix:** install the missing piece, into the shell you actually use. For the module: `Install-Module Terminal-Icons -Repository PSGallery -Force -Scope CurrentUser` (run from `pwsh`, not 5.1, if pwsh is your shell — they have separate module paths). For Starship/fnm: `winget install Starship.Starship` / `winget install Schniz.fnm`, then open a new terminal.
+- **Permanent fix:** guard every external-tool call in the profile with `if (Get-Command … )` / `Get-Module -ListAvailable` so a missing tool is skipped instead of fatal, and/or adopt the self-healing profile that auto-installs missing tools on first launch. Both are in [Roaming & self-healing across machines](#16-roaming--self-healing-across-machines-optional) and [`windows-powershell/`](windows-powershell/).
+- **OneDrive module-path note:** with Documents redirected to OneDrive, `Install-Module -Scope CurrentUser` lands under `…\OneDrive\Documents\…\Modules` (so it roams) — but only in a *normal* interactive session. A tool or process launched with a stripped/non-redirected environment (some automation, or a shell that resolved Documents before redirection) can report a roamed module as missing even though it's installed; verify with `Get-Module -ListAvailable <name>` inside a real `pwsh` session.
 
 ### Execution policy blocks PowerShell scripts
 - Developer workstations should use `Unrestricted` to avoid friction:

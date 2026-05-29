@@ -1,0 +1,61 @@
+{
+    "$help": "https://aka.ms/terminal-documentation",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+
+    "//": "Example Windows Terminal settings. Default shell is PowerShell 7 (pwsh), not the",
+    "//2": "built-in Windows PowerShell 5.1. The defaultProfile GUID below is the well-known",
+    "//3": "id Windows Terminal assigns to its auto-discovered PowerShell 7 (PowershellCore)",
+    "//4": "profile - by reusing it here, your font/color overrides MERGE onto that generated",
+    "//5": "profile instead of creating a duplicate. Roam this file across machines with",
+    "//6": "Link-WindowsTerminalSettings.ps1. Change the font to whatever Nerd Font you install.",
+
+    "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+    "copyOnSelect": false,
+    "copyFormatting": "none",
+
+    "profiles": {
+        "defaults": {
+            "colorScheme": "Campbell",
+            "cursorShape": "bar",
+            "font": {
+                "face": "CaskaydiaCove NFM",
+                "size": 12
+            },
+            "padding": "8, 8, 8, 8",
+            "useAcrylic": false
+        },
+        "list": [
+            {
+                "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+                "name": "PowerShell",
+                "source": "Windows.Terminal.PowershellCore",
+                "hidden": false,
+                "historySize": 9001,
+                "startingDirectory": "%USERPROFILE%\\Code",
+                "snapOnInput": true
+            },
+            {
+                "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+                "name": "Windows PowerShell",
+                "commandline": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                "hidden": false
+            },
+            {
+                "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+                "name": "Command Prompt",
+                "commandline": "%SystemRoot%\\System32\\cmd.exe",
+                "hidden": false
+            }
+        ]
+    },
+
+    "schemes": [],
+    "themes": [],
+
+    "actions": [
+        { "command": { "action": "copy", "singleLine": false }, "keys": "ctrl+c" },
+        { "command": "paste", "keys": "ctrl+v" },
+        { "command": "find", "keys": "ctrl+shift+f" },
+        { "command": { "action": "splitPane", "split": "auto", "splitMode": "duplicate" }, "keys": "alt+shift+d" }
+    ]
+}
