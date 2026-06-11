@@ -29,7 +29,7 @@ Follow this sequence to avoid dependency issues:
 brew install git
 
 # Essential utilities
-brew install ripgrep jq tree fd wget
+brew install ripgrep jq tree fd wget uv
 
 # System monitoring
 brew install htop
@@ -133,7 +133,21 @@ eslint --version
 tsc --version
 ```
 
-### 6. GitHub CLI
+### 6. GSD Graph Context CLI
+
+```bash
+uv tool install graphifyy
+```
+
+**Verify:**
+```bash
+graphify --version
+```
+
+> **GSD note:** `$gsd-graphify build` shells out to `graphify update .`, so every macOS development machine that uses GSD graph context needs the Graphify CLI on `PATH`. Do not install Graphify repo hooks by default; let GSD refresh graph context explicitly.
+> The official Graphify package is PyPI `graphifyy` (double-y); the CLI command is still `graphify`. Use `uv tool install graphifyy` rather than npm packages with similar names.
+
+### 7. GitHub CLI
 
 ```bash
 brew install gh
@@ -148,7 +162,7 @@ gh --version
 gh auth status
 ```
 
-### 7. Cloud & Container Tools
+### 8. Cloud & Container Tools
 
 ```bash
 # Docker Desktop (includes CLI and GUI)
@@ -185,7 +199,7 @@ gcloud components update
 
 **Note:** gcloud may prompt to install Python 3.13 during updates. If you already have Python 3.11+ installed, you can skip this - gcloud works fine with newer Python versions.
 
-### 8. Security
+### 9. Security
 
 **npm audit** is built into npm and should be part of your regular workflow:
 ```bash
@@ -198,7 +212,7 @@ npm audit fix
 
 Consider adding `npm audit` to your CI pipeline. For more comprehensive scanning, look into [Snyk](https://snyk.io/) or [Socket](https://socket.dev/).
 
-### 9. Additional Utilities
+### 10. Additional Utilities
 
 ```bash
 # File watching for Jest, Metro, etc.
@@ -254,6 +268,8 @@ watchman --version
 | wget | File downloader | `brew install wget` |
 | htop | System monitor | `brew install htop` |
 | watchman | File watching (Jest, Metro) | `brew install watchman` |
+| uv | Python tool manager used for Graphify | `brew install uv` |
+| graphify | Local knowledge graph builder for GSD graph context | `uv tool install graphifyy` |
 | curl | HTTP client | Included with macOS |
 | make | Build automation | Included with Xcode CLI tools |
 
@@ -263,7 +279,7 @@ If you prefer to install everything at once (after prerequisites):
 
 ```bash
 # Homebrew packages
-brew install nvm git gh ripgrep jq tree fd wget htop watchman
+brew install nvm git gh ripgrep jq tree fd wget htop watchman uv
 brew install --cask docker google-cloud-sdk
 
 # Configure nvm (add to ~/.zshrc, then source it)
@@ -276,6 +292,7 @@ nvm alias default 'lts/*'    # Quotes required in zsh
 
 # Global npm packages
 npm install -g yarn pnpm prettier eslint typescript
+uv tool install graphifyy
 ```
 
 ## Verified Versions (as of March 2026)
@@ -297,6 +314,8 @@ These versions are known to work well together:
 | GitHub CLI | 2.89.0 | - |
 | Google Cloud SDK | 555.0.0+ | - |
 | Docker | 29.2.0+ | - |
+| Graphify CLI | 0.8.x | Required by GSD graph context (`$gsd-graphify`) |
+| uv | 0.11.x | Python tool manager used for Graphify |
 | Homebrew | 5.0.13+ | - |
 
 ## Development Environment
@@ -360,6 +379,8 @@ commands=(
     "jq:jq"
     "tree:tree"
     "fd:fd"
+    "uv:uv"
+    "graphify:Graphify CLI"
 )
 
 for cmd in "${commands[@]}"; do
@@ -383,6 +404,8 @@ After installing all tools, verify these key items:
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account
 - [ ] **Docker running**: `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
+- [ ] **uv available**: `uv --version` works
+- [ ] **Graphify CLI available**: `graphify --version` works before using `$gsd-graphify build`
 - [ ] **Git configured**: Set `git config --global user.name` and `git config --global user.email`
 
 **Optional but recommended:**
@@ -403,7 +426,7 @@ After installing all tools, verify these key items:
 ### Global npm packages missing after Node.js upgrade
 - nvm installs global packages per Node version — switching versions means starting fresh
 - When upgrading, use: `nvm install --lts --reinstall-packages-from=current`
-- If you already upgraded without that flag: `npm install -g yarn pnpm prettier eslint typescript`
+- If you already upgraded without that flag: `npm install -g yarn pnpm prettier eslint typescript && uv tool install graphifyy`
 
 ### `which git` shows /usr/bin/git after brew install
 - macOS bundles an older Git at `/usr/bin/git`
@@ -455,7 +478,7 @@ npm update -g
 
 # Update Node.js to latest LTS
 # IMPORTANT: Use --reinstall-packages-from to carry over global npm packages from your current version.
-# Without this flag, global packages (prettier, eslint, typescript, etc.) won't be available in the new version.
+# Without this flag, global npm packages (prettier, eslint, typescript, etc.) won't be available in the new version.
 nvm install --lts --reinstall-packages-from=current
 nvm alias default 'lts/*'    # Quotes required in zsh
 
@@ -466,7 +489,7 @@ gcloud components update
 **After upgrading Node.js LTS:**
 - New terminal windows will use the new version automatically
 - Existing terminals stay on the old version — run `nvm use default` or restart them
-- If you forgot `--reinstall-packages-from`, reinstall globals: `npm install -g yarn pnpm prettier eslint typescript`
+- If you forgot `--reinstall-packages-from`, reinstall globals: `npm install -g yarn pnpm prettier eslint typescript && uv tool install graphifyy`
 - The old Node.js version remains installed. Remove it with `nvm uninstall <old-version>` or keep it for projects that need it
 
 **Recommended maintenance schedule:**

@@ -513,6 +513,7 @@ Some npm packages with native C/C++ addons (via `node-gyp`) require Python and C
 ```powershell
 winget install Python.Python.3.12
 winget install Microsoft.VisualStudio.2022.BuildTools
+winget install astral-sh.uv
 ```
 
 After installing Build Tools, configure node-gyp to use them via the `GYP_MSVS_VERSION` environment variable (persisted at the user level so it applies in every shell):
@@ -525,6 +526,7 @@ After installing Build Tools, configure node-gyp to use them via the `GYP_MSVS_V
 **Verify:**
 ```powershell
 python --version
+uv --version
 ```
 
 ### 14. Cloud CLIs
@@ -564,6 +566,7 @@ Terminal-based AI coding assistants that run directly in your project directory:
 
 ```powershell
 npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli
+uv tool install graphifyy
 ```
 
 | Tool | Command | Auth |
@@ -571,13 +574,18 @@ npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli
 | **Claude Code** | `claude` | Anthropic API key or Claude subscription |
 | **Codex CLI** | `codex` | OpenAI API key |
 | **Gemini CLI** | `gemini` | Google AI API key or `gcloud auth login` |
+| **Graphify CLI** | `graphify` | None for local GSD graph builds |
 
 **Verify:**
 ```powershell
 claude --version
 codex --version
 gemini --version
+graphify --version
 ```
+
+> **GSD note:** `$gsd-graphify build` shells out to `graphify update .`, so every Windows development machine that uses GSD graph context needs the Graphify CLI on `PATH`. Do not install Graphify repo hooks by default; let GSD refresh graph context explicitly.
+> The official Graphify package is PyPI `graphifyy` (double-y); the CLI command is still `graphify`. Use `uv tool install graphifyy` rather than npm packages with similar names.
 
 > **Note:** Claude Code uses ripgrep (`rg`, installed in step 10) for file search. If you ever see `Ripgrep is not available`, Claude couldn't use its bundled `rg` *and* didn't find one on the `PATH` that the `claude` process started with — make sure `BurntSushi.ripgrep.MSVC` is installed with a copy on a stable `PATH` dir, relaunch `claude` from a fresh terminal, and run `/doctor` to confirm. See **step 10** for the durable fix.
 
@@ -672,6 +680,8 @@ The symlink is a local filesystem object, so it can't itself roam — run the sc
 | fzf | Fuzzy finder | `winget install junegunn.fzf` |
 | eza | Modern ls replacement | `winget install eza-community.eza` |
 | tlrc (`tldr`) | Simplified command help | `winget install tldr-pages.tlrc` |
+| uv | Python tool manager used for Graphify | `winget install astral-sh.uv` |
+| graphify | Local knowledge graph builder for GSD graph context | `uv tool install graphifyy` |
 | curl | HTTP client | Included with Windows 10/11 |
 
 ### Shell Experience
@@ -707,7 +717,7 @@ $wingetArgs = '--silent --accept-source-agreements --accept-package-agreements'
 $packages = @(
     'Microsoft.WindowsTerminal','Git.Git','Microsoft.VisualStudioCode','Schniz.fnm','GitHub.cli',
     # 'Docker.DockerDesktop',          # Optional -- uncomment if needed
-    'Python.Python.3.12','Microsoft.VisualStudio.2022.BuildTools',
+    'Python.Python.3.12','Microsoft.VisualStudio.2022.BuildTools','astral-sh.uv',
     'Microsoft.AzureCLI','Google.CloudSDK',
     'BurntSushi.ripgrep.MSVC','jqlang.jq','sharkdp.fd','sharkdp.bat','dandavison.delta',
     'gnuwin32.tree','junegunn.fzf','eza-community.eza','tldr-pages.tlrc','Starship.Starship'
@@ -755,6 +765,7 @@ fnm default lts-latest
 # ── Global npm packages ──
 corepack enable
 npm install -g pnpm yarn prettier eslint typescript @anthropic-ai/claude-code @openai/codex @google/gemini-cli
+uv tool install graphifyy
 [Environment]::SetEnvironmentVariable('GYP_MSVS_VERSION','2022','User')
 
 # ── SSH key (interactive) ──
@@ -784,6 +795,7 @@ These versions are known to work well together:
 | Google Cloud SDK | 555.0.0+ | Requires Python on PATH |
 | Docker | 29.x | Optional; install when a project requires it |
 | Python | 3.12.10 | Required for node-gyp and gcloud |
+| uv | 0.11.x | Python tool manager used for Graphify |
 | VS Code | 1.109.0 | - |
 | ripgrep | 15.1.0 | - |
 | jq | 1.8.1 | - |
@@ -798,6 +810,7 @@ These versions are known to work well together:
 | Claude Code | 2.1.37 | Anthropic AI coding assistant |
 | Codex CLI | 0.89.0 | OpenAI coding assistant |
 | Gemini CLI | 0.25.2 | Google AI coding assistant |
+| Graphify CLI | 0.8.x | Required by GSD graph context (`$gsd-graphify`) |
 
 ## Optional but Recommended
 
@@ -871,11 +884,13 @@ $commands = @(
     @{cmd="tsc"; args="--version"; name="TypeScript"},
     @{cmd="gh"; args="--version"; name="GitHub CLI"},
     @{cmd="python"; args="--version"; name="Python"},
+    @{cmd="uv"; args="--version"; name="uv"},
     @{cmd="bat"; args="--version"; name="bat"},
     @{cmd="delta"; args="--version"; name="delta"},
     @{cmd="claude"; args="--version"; name="Claude Code"},
     @{cmd="codex"; args="--version"; name="Codex CLI"},
     @{cmd="gemini"; args="--version"; name="Gemini CLI"},
+    @{cmd="graphify"; args="--version"; name="Graphify CLI"},
     @{cmd="docker"; args="--version"; name="Docker"},
     @{cmd="az"; args="--version"; name="Azure CLI"},
     @{cmd="gcloud"; args="--version"; name="Google Cloud SDK"},
@@ -952,6 +967,8 @@ After installing all tools, verify these key items:
 - [ ] **GitHub authenticated**: `gh auth status` shows logged in
 - [ ] **Docker running** (if installed): `docker ps` works without errors (requires Docker Desktop to be launched)
 - [ ] **Global packages available**: `prettier --version`, `eslint --version`, `tsc --version` all work
+- [ ] **uv available**: `uv --version` works
+- [ ] **Graphify CLI available**: `graphify --version` works before using `$gsd-graphify build`
 - [ ] **Azure authenticated**: `az account show` shows your subscription
 - [ ] **gcloud authenticated**: `gcloud auth list` shows your account
 - [ ] **Starship prompt**: Terminal shows customized prompt with git/node info
