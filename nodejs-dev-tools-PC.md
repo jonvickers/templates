@@ -560,6 +560,47 @@ az --version
 gcloud --version
 ```
 
+**Twilio CLI** (optional — install on workstations that manage Twilio SMS/voice projects, e.g. DentalPayz):
+
+```powershell
+npm install -g twilio-cli
+```
+
+> **Why npm and not Scoop?** Twilio's docs recommend Scoop on Windows (it auto-updates), but the
+> Scoop install is broken in practice: the release tarball contains Unix-style symlinks under
+> `node_modules\.bin`, 7-Zip refuses to create them on Windows ("Dangerous link path was ignored"),
+> and extraction aborts with exit code 2 (verified 2026-06 on twilio-cli 6.2.4). The npm package is
+> the **same official artifact** (repo `github.com/twilio/twilio-cli`, sole maintainer `twilio-dx
+> <team_interfaces@twilio.com>`) — it just doesn't auto-update; run `npm update -g twilio-cli`
+> occasionally.
+
+**Authenticate** (interactive — run in a real terminal; the prompts cannot be driven from a
+non-interactive shell, including Claude Code's `!` bash mode):
+
+```powershell
+twilio login    # alias of twilio profiles:create
+```
+
+- **Account SID** starts with `AC` (34 chars) — Console dashboard → **Account Info** panel. The
+  `US…` identifier shown elsewhere in the console is your *User* SID; the CLI won't accept it.
+- The **Auth Token** is entered once, used to mint a standard API key, then discarded — the key
+  lands in **Windows Credential Manager**, profile metadata in `~\.twilio-cli\config.json`.
+- **Post-login gotcha:** the new profile may NOT be active (`There is no active profile set`):
+  ```powershell
+  twilio profiles:list
+  twilio profiles:use <profile-id>    # profile id is whatever you named it (e.g. your email)
+  ```
+- **Non-interactive alternative** (CI/agents — no stored profile): set `TWILIO_ACCOUNT_SID` +
+  `TWILIO_AUTH_TOKEN` env vars, or an API key pair (`TWILIO_API_KEY`/`TWILIO_API_SECRET` + the
+  account SID). The CLI does not use OAuth — don't bother creating an OAuth app for it.
+
+**Verify** (second command doubles as a webhook audit — shows where every number's SMS/voice
+callbacks point):
+```powershell
+twilio --version
+twilio api:core:incoming-phone-numbers:list --properties phoneNumber,smsUrl,voiceUrl
+```
+
 ### 15. AI-Assisted Development CLIs
 
 Terminal-based AI coding assistants that run directly in your project directory:
@@ -667,6 +708,7 @@ The symlink is a local filesystem object, so it can't itself roam — run the sc
 | docker (optional) | `winget install Docker.DockerDesktop` | Launch Docker Desktop, enable WSL 2 |
 | az (Azure CLI) | `winget install Microsoft.AzureCLI` | `az login` |
 | gcloud | `winget install Google.CloudSDK` | `gcloud init` |
+| twilio (optional) | `npm install -g twilio-cli` | `twilio login`, then `twilio profiles:use <id>` — do NOT use Scoop (broken extraction, see step 14) |
 
 ### CLI Utilities
 | Tool | Description | Install Command |

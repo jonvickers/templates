@@ -199,6 +199,44 @@ gcloud components update
 
 **Note:** gcloud may prompt to install Python 3.13 during updates. If you already have Python 3.11+ installed, you can skip this - gcloud works fine with newer Python versions.
 
+**Twilio CLI** (optional — install on workstations that manage Twilio SMS/voice projects, e.g. DentalPayz):
+
+```bash
+brew tap twilio/brew && brew install twilio
+```
+
+Homebrew is Twilio's recommended macOS channel (official tap, auto-updates with `brew upgrade`).
+The npm package (`npm install -g twilio-cli`) is the same official artifact if you prefer npm —
+on **Windows** npm is the required path (the Scoop install fails on symlink extraction; see the
+Windows guide), but on macOS brew is fine.
+
+**Authenticate** (interactive — run in a real terminal; the prompts cannot be driven from a
+non-interactive shell):
+
+```bash
+twilio login    # alias of twilio profiles:create
+```
+
+- **Account SID** starts with `AC` (34 chars) — Console dashboard → **Account Info** panel. The
+  `US…` identifier shown elsewhere in the console is your *User* SID; the CLI won't accept it.
+- The **Auth Token** is entered once, used to mint a standard API key, then discarded — the key
+  lands in the **macOS Keychain**, profile metadata in `~/.twilio-cli/config.json`.
+- **Post-login gotcha:** the new profile may NOT be active (`There is no active profile set`):
+  ```bash
+  twilio profiles:list
+  twilio profiles:use <profile-id>    # profile id is whatever you named it (e.g. your email)
+  ```
+- **Non-interactive alternative** (CI/agents — no stored profile): set `TWILIO_ACCOUNT_SID` +
+  `TWILIO_AUTH_TOKEN` env vars, or an API key pair (`TWILIO_API_KEY`/`TWILIO_API_SECRET` + the
+  account SID). The CLI does not use OAuth — don't bother creating an OAuth app for it.
+
+**Verify** (second command doubles as a webhook audit — shows where every number's SMS/voice
+callbacks point):
+```bash
+twilio --version
+twilio api:core:incoming-phone-numbers:list --properties phoneNumber,smsUrl,voiceUrl
+```
+
 ### 9. Security
 
 **npm audit** is built into npm and should be part of your regular workflow:
@@ -250,6 +288,7 @@ watchman --version
 |------|-----------------|--------------|
 | docker | `brew install --cask docker` | Launch Docker Desktop app |
 | gcloud | `brew install --cask google-cloud-sdk` | Run: `gcloud init` |
+| twilio (optional) | `brew tap twilio/brew && brew install twilio` | `twilio login`, then `twilio profiles:use <id>` |
 
 ### Code Quality & TypeScript
 | Tool | Install Command |
