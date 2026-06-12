@@ -84,8 +84,9 @@ report. **Do not commit unless the user asks.**
    When we branch at all, we branch per **phase**, never per milestone
    (see [§2.1](#21-branching-strategy--pick-by-integration-cadence-not-by-vocabulary)).
 3. **The worktree HEAD fix is mandatory on every repo** that wants parallel agent
-   execution — otherwise GSD silently drops to sequential whenever the local
-   default branch is ahead of origin.
+   execution — without it, worktree spawns mismatch whenever `HEAD` differs from
+   `origin/HEAD` (on phase-branching repos: **always**, even fully pushed), and
+   GSD drops to sequential or the executor halts with exit 42.
 4. **A few settings are landmines** — read [§5](#5-settings-that-need-special-attention)
    before changing anything. The worst one: `subagent_timeout` is in
    **milliseconds**, not seconds.
@@ -248,10 +249,25 @@ gsd-tools query workstream.create <milestone-name>
 ## 3. The worktree HEAD fix (REQUIRED on every repo)
 
 Parallel executor agents run in Git worktrees (`workflow.use_worktrees: true`).
-By default the harness forks each worktree from **`origin/HEAD`**. The moment your
-local default branch is **ahead of origin** (unpushed commits — extremely common),
-the fork base mismatches and GSD **silently degrades to sequential execution**
-(the "⚠ Worktree base mismatch" / exit-42 symptom). You lose all parallelism.
+By default the harness forks each worktree from **`origin/HEAD`** — *not* from the
+branch you are working on. Any time `HEAD ≠ origin/HEAD`, the fork base mismatches.
+That happens whenever the default branch has unpushed commits — and on Archetype B
+repos it is **guaranteed during every phase**, because with
+`branching_strategy: "phase"` the working branch is by construction ahead of
+`origin/HEAD` (phase commits, pre-dispatch PLAN.md commits). Pushing doesn't help:
+a phase branch is never `origin/HEAD`. (Verified live on dental-payz, 2026-06-12:
+a worktree spawned from a phase branch came up on the `dev` tip, not the phase
+HEAD.)
+
+Same root cause, two symptoms depending on the workflow:
+
+- **execute-phase** detects it up front (`worktree base-check`) and **silently
+  degrades to sequential execution** ("⚠ Worktree base mismatch"). You lose all
+  parallelism.
+- **quick tasks** detect it inside the spawned worktree: the executor **halts
+  fail-closed with exit 42** ("FATAL: worktree base mismatch") and the
+  orchestrator must recover or rerun on the main tree. Nothing is lost, but the
+  run stalls.
 
 **Fix:** tell the harness to fork from local **HEAD** by setting
 `worktree.baseRef: "head"` in `.claude/` settings. (Valid values are only
@@ -274,7 +290,8 @@ wins. `settings.local.json` is normally gitignored (machine-local), so it does
   ```
   Every fresh clone, on every engineer's machine, then inherits parallel execution
   with zero manual steps. (Confirm `.claude/settings.json` is not gitignored; the
-  usual ignore is only `settings.local.json`.)
+  usual ignore is only `settings.local.json`.) The setting takes effect
+  **immediately** for new worktree spawns — no Claude session restart needed.
 
 - **Fallback only (stopgap on one machine):** `gsd-tools worktree set-baseref`
   writes the same key into the *local* `.claude/settings.local.json` (no-clobber,
@@ -288,6 +305,18 @@ wins. `settings.local.json` is normally gitignored (machine-local), so it does
 gsd-tools worktree base-check
 # Want: { "shouldDegrade": false, "reason": "baseref-head", ... }
 ```
+
+Note `base-check` short-circuits the moment the *setting* reads `"head"` — it
+verifies configuration, not harness behavior. For a definitive end-to-end check,
+spawn a worktree-isolated agent that runs `git rev-parse HEAD` and compare its
+output to the main repo's `git rev-parse HEAD` — they must match exactly.
+
+**Don't rely on user-level settings.** Putting `worktree.baseRef` only in the
+user-level `~/.claude/settings.json` is not enough: GSD's `base-check` reads only
+the *repo's* `.claude/settings.local.json` and `.claude/settings.json`, so a
+user-level value is invisible to GSD and execute-phase will still degrade to
+sequential even if the harness forks correctly. Set it per-repo in the committed
+shared file.
 
 If you genuinely don't want worktrees at all, set `workflow.use_worktrees: false`
 instead (agents run sequentially on the main tree).
@@ -492,7 +521,7 @@ These are the ones that bite. Read before touching.
 | **`workflow.subagent_timeout`** | **In MILLISECONDS.** The `/gsd-config --advanced` prompt mislabels it as "seconds (default 600)" — that's wrong; the runtime default is `300000` (5 min). We use `900000` (15 min) for Opus deep-reasoning headroom. **Typing `900` sets 0.9s and times out every subagent instantly.** |
 | **`context_window`** | Keep `200000` unless the agents GSD *spawns* truly run a 1M-context model. Your interactive session being on a 1M model does **not** mean spawned agents are — they use the standard Opus tier (200k). Values `≥ 500000` enable adaptive context enrichment, which would overflow 200k agents → truncation → worse output. |
 | **`commit_docs` + `/gsd-pr-branch`** | `commit_docs: true` keeps planning in git, and (because it's `true`) GSD does **not** strip `.planning/` at merge. But `/gsd-pr-branch` *deliberately* strips `.planning/` to make a clean review PR. If you merge **only** that stripped branch, planning never reaches the default branch. Always merge the real branch (squash/full) to land planning; use pr-branch only as a review artifact. |
-| **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). Doesn't travel via git unless committed in shared `settings.json`. |
+| **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). Doesn't travel via git unless committed in shared `settings.json`. With `branching_strategy: "phase"` the mismatch is otherwise *guaranteed* (a phase branch is never `origin/HEAD`). A value only in user-level `~/.claude/settings.json` is invisible to GSD's `base-check` — set it per repo. |
 | **`workflow.use_worktrees` on Windows** | Windows has known worktree/merge friction (merge-rollback, base mismatch). The §3 HEAD fix resolves the common mismatch. If worktree merges still misbehave, set `use_worktrees: false` (sequential) as the escape hatch. |
 | **`mode: "yolo"`** | Runs phases autonomously with no approval gates. Fine for a trusted single-owner repo (alpine-manager uses it). New/shared repos should usually start `"interactive"`. |
 | **`git.branching_strategy: "milestone"`** | **Not our standard — don't use it.** Long-lived milestone branches maximize merge pain; prefer `none`/`phase` and integrate often. For a clean milestone-wide review PR, use `/gsd-pr-branch` instead (see §2.1). |
