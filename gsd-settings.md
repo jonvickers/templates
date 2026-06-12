@@ -81,6 +81,8 @@ report. **Do not commit unless the user asks.**
 2. **Branching strategy and parallel work are different layers.**
    `git.branching_strategy` only decides *who cuts feature branches and how often*.
    Running two milestones in parallel is solved by **workstreams**, not branching.
+   When we branch at all, we branch per **phase**, never per milestone
+   (see [§2.1](#21-branching-strategy--pick-by-integration-cadence-not-by-vocabulary)).
 3. **The worktree HEAD fix is mandatory on every repo** that wants parallel agent
    execution — otherwise GSD silently drops to sequential whenever the local
    default branch is ahead of origin.
@@ -90,6 +92,37 @@ report. **Do not commit unless the user asks.**
 5. **Graphify is local generated context, not repo source.** Keep the Graphify
    CLI installed on every engineer machine, but do not commit graph caches or
    install repo hooks. Refresh GSD context with `$gsd-graphify build`.
+
+---
+
+## The standard in four rules (plain English)
+
+If you remember nothing else from this file, remember these:
+
+1. **Count the branches, not the people.** Developer count never changes the
+   branching setup — only the repo's branch layout does.
+2. **Main-only repo → GSD works directly on `main`.** No feature branches, no
+   merging: `branching_strategy = "none"`, `base_branch = "main"`.
+3. **Dev/test/prod repo → GSD works off `dev`, and only `dev`.** GSD cuts a
+   short-lived branch per phase and merges it back into `dev`:
+   `branching_strategy = "phase"`, `base_branch = "dev"`. Promoting
+   `dev → test → prod` is a human/CI job — GSD never touches it.
+4. **Multiple people or milestones at once → add a workstream, don't change
+   branching.** Workstreams give each parallel effort its own planning folder
+   so state files never collide; the `git` block from rules 2–3 stays exactly
+   the same.
+
+| Repo | Branching config | Extra step |
+|---|---|---|
+| Single dev, main only | Rule 2 (`none` + `main`) | none |
+| Multi dev, main only | Rule 2 (`none` + `main`) | one workstream per person/milestone |
+| Single dev, dev/test/prod | Rule 3 (`phase` + `dev`) | none |
+| Multi dev, dev/test/prod | Rule 3 (`phase` + `dev`) | one workstream per person/milestone |
+
+Plus the one mandatory extra on every repo regardless of row: the
+[worktree HEAD fix](#3-the-worktree-head-fix-required-on-every-repo) in the
+committed `.claude/settings.json`, or parallel agent execution silently
+degrades to sequential.
 
 ---
 
@@ -120,11 +153,13 @@ from and merge back into ONE base branch.** GSD does **not** promote
 GSD.
 
 - `git.base_branch = "dev"` ← point GSD at the integration branch, never `prod`.
-- `git.branching_strategy`:
-  - `"phase"` if you want **GSD to auto-create** a feature branch per phase off
-    `dev` and merge it back (hands-off branching), **or**
-  - `"none"` if engineers create their own feature branches by hand off `dev` and
-    just let GSD commit to the current branch.
+- `git.branching_strategy = "phase"` — **the house standard**: GSD auto-creates a
+  feature branch per phase off `dev` and merges it back (hands-off branching).
+  - `"none"` is the documented exception, for teams that insist on cutting
+    feature branches by hand off `dev` and letting GSD commit to the current
+    branch.
+  - `"milestone"` is **not** used — see the house decision in
+    [§2.1](#21-branching-strategy--pick-by-integration-cadence-not-by-vocabulary).
 - `dev → test → prod` promotion: your normal Git/CI flow. GSD never touches it.
 
 > **"Auto-create vs manual" = who runs `git checkout -b`.**
@@ -140,9 +175,21 @@ GSD.
 
 | Strategy | Branch created | Merges back | Use when |
 |---|---|---|---|
-| `none` | never (GSD uses current branch) | n/a | Main-only repos; or you manage branches by hand. **Default.** |
-| `phase` | per phase, at execute-phase start | after each phase (frequent, small) | dev/test/prod repos that want GSD-managed feature branches; high code overlap between parallel work. |
-| `milestone` | once per milestone | once at `complete-milestone` (one big merge) | One clean "PR per release"; **only when parallel lines of work barely overlap in code.** |
+| `none` | never (GSD uses current branch) | n/a | **Our standard for main-only repos (Archetype A).** Also for teams that manage branches by hand. (GSD's shipped default.) |
+| `phase` | per phase, at execute-phase start | after each phase (frequent, small) | **Our standard for dev/test/prod repos (Archetype B).** GSD-managed feature branches; works even with high code overlap between parallel work. |
+| `milestone` | once per milestone | once at `complete-milestone` (one big merge) | **Not used — see house decision below.** Only theoretically defensible when parallel lines of work barely overlap in code. |
+
+**House decision — phase, not milestone.** For repos that branch at all
+(Archetype B), we branch per **phase**. The difference is how long a branch
+lives before it merges back: a phase branch lives hours-to-days and merges
+while the changes are fresh; a milestone branch lives for *weeks* while `dev`
+keeps moving, then lands as one giant merge where all the accumulated drift
+collides at once. `milestone` is defensible only when you want one clean
+"PR per release" **and** parallel work barely touches the same files — and that
+second condition almost never holds, least of all in multi-developer repos.
+If you want a clean milestone-wide review PR anyway, you don't need milestone
+branching for it: `/gsd-pr-branch` assembles one after the fact while the
+day-to-day work still integrates per phase.
 
 **Rule of thumb:** branch granularity should match how often you can integrate.
 **High file overlap → integrate often → `none` (trunk) or `phase`. Avoid
@@ -304,7 +351,7 @@ unless a repo-specific note says otherwise.
 
 ```jsonc
 "git": {
-  "branching_strategy": "phase",   // or "none" if engineers branch by hand
+  "branching_strategy": "phase",   // house standard. "none" only if engineers branch by hand; never "milestone".
   "base_branch": "dev"             // the DEFAULT/integration branch — never prod
 }
 ```
@@ -448,7 +495,7 @@ These are the ones that bite. Read before touching.
 | **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). Doesn't travel via git unless committed in shared `settings.json`. |
 | **`workflow.use_worktrees` on Windows** | Windows has known worktree/merge friction (merge-rollback, base mismatch). The §3 HEAD fix resolves the common mismatch. If worktree merges still misbehave, set `use_worktrees: false` (sequential) as the escape hatch. |
 | **`mode: "yolo"`** | Runs phases autonomously with no approval gates. Fine for a trusted single-owner repo (alpine-manager uses it). New/shared repos should usually start `"interactive"`. |
-| **`git.branching_strategy: "milestone"`** | Avoid for parallel work that overlaps in code — long-lived milestone branches maximize merge pain. Prefer `none`/`phase` and integrate often. |
+| **`git.branching_strategy: "milestone"`** | **Not our standard — don't use it.** Long-lived milestone branches maximize merge pain; prefer `none`/`phase` and integrate often. For a clean milestone-wide review PR, use `/gsd-pr-branch` instead (see §2.1). |
 | **Graphify caches** | Keep `graphify-out/` and `.planning/graphs/` local/ignored. Commit `.graphifyignore`, not generated graph JSON. Install the Graphify CLI per computer; refresh with `$gsd-graphify build`; do not rely on repo hooks. |
 | **`max_discuss_passes`** | Leave at `3`. Raising it increases how many rounds of questions discuss-phase asks you — more interruption, not more quality, in interactive use. |
 
@@ -476,7 +523,8 @@ Run for every new repo so GSD is set up consistently:
    (`model_profile`, `workflow.*`, `commit_docs`, etc.).
 4. **Set the `git` block** for your archetype:
    - A: `branching_strategy=none`, `base_branch=main`
-   - B: `base_branch=dev`, and `branching_strategy=phase` (auto) or `none` (manual)
+   - B: `base_branch=dev`, `branching_strategy=phase` (house standard; `none`
+     only for hand-managed branches — never `milestone`)
 5. **Apply the worktree HEAD fix as a shared setting**
    ([§3](#3-the-worktree-head-fix-required-on-every-repo)) — put
    `worktree.baseRef: "head"` in the **committed** `.claude/settings.json` so every
