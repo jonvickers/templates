@@ -36,10 +36,10 @@ it shorter; I'll ask for more.
 
 ## Never blanket-kill processes
 
-I routinely run interactive `codex`, `claude`, `gemini`, and `node` sessions in
-**other terminals** while you work. Killing by bare image name — `taskkill /IM
-codex.exe`, `Stop-Process -Name codex`, `Get-Process node | Stop-Process`,
-`pkill codex` — destroys those sibling sessions and loses my work.
+I routinely run interactive `codex`, `claude`, `gemini`, `opencode`, and `node`
+sessions in **other terminals** while you work. Killing by bare image name —
+`taskkill /IM codex.exe`, `Stop-Process -Name codex`, `Get-Process node |
+Stop-Process`, `pkill codex` — destroys those sibling sessions and loses my work.
 
 - **Never kill a process you did not spawn, and never kill by bare image name.**
 - To clear leftover *automation* processes, scope by command line: review lanes
@@ -72,11 +72,9 @@ short of that, test it yourself.
 
 ## Browser verification, and what a dead loopback URL means
 
-Verify your own front-end work visually before asking me to look. Never claim the
-browser can't reach the local server, and never defer a check you can run.
-
-When a loopback URL fails in the browser, work this ladder in order — the causes
-below present identically, so don't guess between them:
+"The browser can't reach the local server" is never a finding — it's an
+unfinished diagnosis. Work this ladder in order; the three causes present
+identically, so don't guess between them:
 
 1. `curl` the same URL from your shell. If that fails too, it's the server. Stop
    debugging the browser.
@@ -124,9 +122,19 @@ grounded review runs ~9 min and blows any ≤600 s bound.
   --skip-git-repo-check -c model_reasoning_effort="medium" -` with the prompt on
   stdin. Always pass the effort override — the config default is tuned for my
   interactive sessions and makes a grounded review take ~10 min.
-- **Claude:** pin `review.models.claude` to a mid-tier model, or pass `--model
-  sonnet`. Prefer keeping `claude` out of `review.default_reviewers` so a no-flag
-  review doesn't silently run the slow host lane.
+- **Claude:** pin `review.models.claude` to a fast mid-tier model (`sonnet` today),
+  or pass `--model sonnet`. Prefer keeping `claude` out of
+  `review.default_reviewers` so a no-flag review doesn't silently run the slow
+  host lane.
+- **Gemini:** dies with `ProjectIdRequiredError` in any repo that commits its own
+  root `.env` — Gemini resolves env files first-match-wins and never merges, so
+  the repo `.env` shadows the home config and the lane silently drops out of every
+  review. Per-repo fix and the project id are in `global-machine.md`.
+- **OpenCode / Grok:** runs through GSD's opencode adapter, so it only
+  participates via `review.reviewer_instances` + `review.default_reviewers` — it
+  is never selected by `--all` or a bare `--opencode` flag. A name in
+  `default_reviewers` that is neither an instance nor a built-in slug is a hard
+  error, not a silent drop.
 - **Time bounds:** give every lane ≥ 900 s and run it in the background. Capture
   stderr to a `.err` file — never `2>/dev/null`.
 - **Don't declare a lane dead on 0-byte interim output.** `claude -p` buffers
@@ -142,93 +150,11 @@ grounded review runs ~9 min and blows any ≤600 s bound.
 **Trigger:** a GSD milestone is being closed — `/gsd-complete-milestone`, "close
 the milestone", or the last phase of a milestone passing verification.
 
-**Rule:** run gates 1–7 in order. Do not report the milestone closed until gate 7
-passes clean. Repo-specific deploy and test commands live in that repo's
-`AGENTS.md`; if they aren't written down, ask once and write them there.
-
-### 1. Worktrees
-
-`git worktree list` and `git worktree prune --dry-run` first — look before removing.
-
-- Remove only worktrees whose branch is merged and whose tree is clean, via
-  `git worktree remove`. Never `rm -rf` a worktree directory. `--force` only
-  after inspecting for uncommitted work.
-- **Escalate to debugging** (don't just clean) if: `.git/worktrees/` has entries
-  with no directory on disk; a worktree HEAD is detached or points at a deleted
-  branch; `git status` inside a worktree errors; worktree count exceeds active
-  workstreams; or the baseref-head degrade check fails. Fix the root cause per
-  `gsd-settings.md` §3 (worktree HEAD fix), then resume cleanup.
-
-### 2. Branches
-
-- `git fetch --prune`, then delete local branches that are fully merged into the
-  base branch **and** have no worktree attached **and** are pushed or `[gone]`.
-- Unmerged or unpushed branch: show its name and last commit and ask. Never
-  guess.
-- Remote branches: only delete ones this milestone created.
-
-### 3. Tracking gaps
-
-- `git status --porcelain -uall` and `git ls-files --others --exclude-standard`.
-  Classify every hit: real source, config, or planning artifact → `git add`;
-  build output or cache → gitignore.
-- Also catch the reverse — files wrongly ignored. Scan `git status --ignored
-  --porcelain` for source-looking paths and confirm with `git check-ignore -v`.
-
-### 4. Env files
-
-- Determine visibility: `gh repo view --json isPrivate -q .isPrivate`.
-- **Private repo:** the env files described above are *meant* to be committed.
-  Add them if untracked, and remove blanket `.env*` gitignore rules that shadow
-  them.
-- **Public repo:** the opposite. Stop and flag before anything is pushed.
-
-### 5. GSD settings coherence
-
-Audit the repo's `.planning/config.json` plus the global GSD defaults against
-`gsd-settings.md` (canonical). Assert:
-
-- Parallel work is coherent end to end: `parallelization`,
-  `workflow.use_worktrees`, `git.branching_strategy`, and `git.base_branch` all
-  agree with the repo's archetype.
-- The worktree HEAD fix is present.
-- `claude_md_path` points at a file that actually exists.
-- Review lanes and model pins are sane — no stale or garbage entries.
-- No duplicated or contradicting guidance across `.planning/config.json`, the
-  repo's `AGENTS.md`, and the global instruction file. Most specific wins;
-  delete the redundant copy rather than keeping both.
-
-Commit any drift fixes separately as `chore(planning):`.
-
-### 6. Commit → push → merge → deploy → test
-
-1. Commit everything outstanding — atomic, conventional messages.
-2. Push the milestone branch.
-3. Merge into the base branch per archetype, then promote all the way to
-   production — Archetype A: into `main`; Archetype B: `dev` → `test` → `prod`.
-   Use a PR where the repo expects one. Never force-push a shared branch.
-4. Deploy each environment you promoted into, using the repo's documented
-   command. Deploy and test one environment at a time — a failing environment
-   blocks promotion to the next.
-5. Test for real, against the milestone's UAT criteria: web UI → drive the
-   browser and actually look at the rendered page; API → curl the endpoint; data
-   → query it. Keep the screenshot, response, or log as evidence. Re-run the same
-   checks against production after the prod deploy — a green `test` environment
-   is not evidence that prod is up.
-6. If production is broken and the fix isn't immediate, roll prod back to the
-   last good deploy first, then fix forward on a lower environment.
-
-### 7. Fix and repeat
-
-Any failure in gate 6 → fix the root cause, not the symptom, commit the fix, and
-re-run from the earliest affected gate. Loop until one clean pass. If the same
-failure survives two fix attempts, stop and report the exact error and what was
-tried.
-
-### Reporting
-
-Five lines max: what merged, what deployed where, what was tested, what was
-fixed, what's left.
+Open `gsd-settings.md` §6 and work its gates in order, §6.1 through §6.8. Do not
+report the milestone closed until the last gate passes clean. That file is synced
+next to this one in every CLI's config directory, and it is also canonical for GSD
+config, branching, and the worktree HEAD fix (§3) — read it rather than guessing
+at any of those.
 
 ---
 
@@ -236,4 +162,5 @@ fixed, what's left.
 
 Before branch or worktree deletion, `reset --hard`, force-push, or overwriting a
 file: inspect the target first, and ask whenever safety isn't provable from the
-command output.
+command output. Never `rm -rf` a worktree directory — `git worktree remove` is the
+only correct way.
