@@ -24,3 +24,7 @@ Example files for a PowerShell setup that roams across machines via OneDrive and
 ## Agent Config Examples
 
 - [Codex AGENTS.md - Asana Example](AGENTS-asana-example.md)
+
+## Agent Task Prompts
+
+- [Fix a recurring Windows emulator memory leak](fix-emulator-memory-leak-agent-prompt.md)
