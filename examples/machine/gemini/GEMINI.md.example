@@ -1,0 +1,34 @@
+# User-level instructions for Gemini CLI
+
+Apply to every project. Project-level GEMINI.md / AGENTS.md may add more, not
+contradict.
+
+Both files below are copies written by `sync-global-prompt.ps1` — edit the
+sources, not these. `global-prompt.md` comes from the public
+`jonvickers/templates` repo. `global-machine.md` is deliberately kept out of that
+repo because it holds host-specific details; its master copy lives in
+`~/.claude`, and the script fans it out to here.
+
+`gsd-settings.md` and `ai-setup-audit.md` are synced into this directory too.
+Nothing imports them — read on demand when closing a milestone, auditing GSD
+config, or checking this machine's setup.
+
+@./global-prompt.md
+@./global-machine.md
+
+## Env files do not merge — first match wins
+
+Gemini resolves env files by walking up from the current directory, checking
+`.gemini/.env` then `.env` at each level, and **stopping at the first hit**. It
+never merges them. A repo that commits its own root `.env` therefore shadows
+`~/.gemini/.env` entirely, and a Workspace account loses
+`GOOGLE_CLOUD_PROJECT` — which surfaces as `ProjectIdRequiredError` from inside
+that repo while everything works fine from the home directory.
+
+Because cross-AI review runs from the repo root, the symptom is not an error the
+user sees: the Gemini lane just silently stops participating in reviews. The
+per-repo fix and the project id are in `global-machine.md`.
+
+<!-- Gemini-only guidance goes here. Anything that would apply equally to
+     Claude or Codex belongs in global-prompt.md instead — this file is loaded
+     on every Gemini session, so a duplicated rule is paid twice and drifts. -->

@@ -11,9 +11,12 @@
                          truth for its copies.
     gsd-settings.md    — canonical GSD config, branching, worktree HEAD fix,
                          review lanes, and the milestone close ritual. Lives in
-                         this repo. NOT
-                         imported by any instruction file — it is read on demand,
-                         so it costs no context until an agent needs it.
+                         this repo.
+    ai-setup-audit.md  — the machine-level AI/agent health work order. Lives in
+                         this repo.
+
+  The last two are NOT imported by any instruction file — they are read on
+  demand, so they cost no context until an agent needs them.
 
   Windows without Developer Mode refuses non-admin symlinks, so all are copied
   rather than linked. Re-run this after editing any of them.
@@ -41,22 +44,29 @@ $machineBody = if (Test-Path $machineSource) { Get-Content $machineSource -Raw }
     $null
 }
 
-# gsd-settings.md rides along so `global-prompt.md`'s pointer to it resolves from
-# every CLI's config directory.
-$gsdSource = Join-Path $PSScriptRoot 'gsd-settings.md'
-$gsdBody = if (Test-Path $gsdSource) { Get-Content $gsdSource -Raw } else {
-    Write-Warning "No gsd-settings.md beside the script — the milestone-ritual pointer will dangle."
-    $null
+# These ride along so `global-prompt.md`'s pointers to them resolve from every
+# CLI's config directory. Read on demand, imported nowhere — zero context cost.
+$onDemand = @('gsd-settings.md', 'ai-setup-audit.md')
+$onDemandBodies = @{}
+foreach ($name in $onDemand) {
+    $path = Join-Path $PSScriptRoot $name
+    if (Test-Path $path) {
+        $onDemandBodies[$name] = Get-Content $path -Raw
+    } else {
+        Write-Warning "No $name beside the script — the pointer to it will dangle."
+    }
 }
 
 $targets = @("$home_\.claude", "$home_\.gemini", "$home_\.codex")
 
-# --- gsd-settings.md: plain copy everywhere, read on demand, imported nowhere ---
+# --- read-on-demand files: plain copy everywhere, imported nowhere ---
 foreach ($dir in $targets) {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
-    if ($gsdBody) {
-        Set-Content -Path (Join-Path $dir 'gsd-settings.md') -Value $gsdBody -NoNewline
-        Write-Host "synced -> $dir\gsd-settings.md"
+    foreach ($name in $onDemand) {
+        if ($onDemandBodies.ContainsKey($name)) {
+            Set-Content -Path (Join-Path $dir $name) -Value $onDemandBodies[$name] -NoNewline
+            Write-Host "synced -> $dir\$name"
+        }
     }
 }
 

@@ -1,0 +1,85 @@
+// Copy to ~/.claude/settings.json — strip these comments, the file must be
+// strict JSON.
+//
+// LAYERING: this file holds CONFIG, never prose. If you catch yourself wanting
+// to explain a value here, the explanation belongs in ~/.claude/CLAUDE.md and
+// the value belongs here — not both.
+//
+// The entire "hooks" block and "statusLine" are written and maintained by the
+// GSD installer. Do not hand-edit them: `/gsd-update` rewrites the block, and a
+// hand-edit either gets discarded or leaves a duplicate entry that fires twice
+// on every tool call. If a hook is wrong, reinstall GSD.
+//
+// Paths below are shown for a Windows machine with fnm-managed Node. On macOS
+// or Linux the node path is usually just "node" and the hook paths use $HOME.
+{
+  "env": {
+    "CLAUDE_CODE_USE_POWERSHELL": "1"
+  },
+
+  // Machine-wide grants only. Anything true for just one repo belongs in that
+  // repo's .claude/settings.json instead.
+  "permissions": {
+    "allow": [
+      "Bash(npx gsd-core:*)",
+      "Read(.planning/**)",
+      "Edit(.planning/**)",
+      "Read(STATE.md)",
+      "Edit(STATE.md)"
+    ],
+    "deny": [
+      "Read(.secrets)",
+      "Read(.secrets/**)"
+    ],
+    "defaultMode": "auto"
+  },
+
+  "model": "opus[1m]",
+  "effortLevel": "xhigh",
+  "autoUpdatesChannel": "latest",
+
+  // ---------------------------------------------------------------------
+  // GSD-MANAGED BELOW — installer-owned, do not hand-edit (see note above).
+  // Shown abbreviated; the real file wires ~17 hook entries across
+  // SessionStart, PreToolUse, PostToolUse, SubagentStop, Stop, PreCompact,
+  // and FileChanged. Reinstall GSD to regenerate.
+  // ---------------------------------------------------------------------
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "\"<node>\" \"<home>/.claude/hooks/gsd-check-update.js\"" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{ "type": "command", "command": "\"<node>\" \"<home>/.claude/hooks/gsd-worktree-path-guard.js\"", "timeout": 15 }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash|Edit|Write|MultiEdit|Agent|Task",
+        "hooks": [{ "type": "command", "command": "\"<node>\" \"<home>/.claude/hooks/gsd-context-monitor.js\"", "timeout": 15 }] }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "\"<node>\" \"<home>/.claude/hooks/gsd-statusline.js\""
+  },
+  // ---------------------------------------------------------------------
+  // END GSD-MANAGED
+  // ---------------------------------------------------------------------
+
+  "enabledPlugins": {
+    "commit-commands@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true
+  },
+
+  "theme": "dark",
+  "tui": "fullscreen"
+}
+
+// NOT here, deliberately:
+//
+//   "worktree": { "baseRef": "head" }
+//
+// GSD reads worktree.baseRef from the REPO's .claude/settings.json. A copy at
+// the user level looks applied, changes nothing, and hides the fact that a repo
+// is missing the fix — every parallel run in that repo silently degrades to
+// sequential. Put it in each repo's committed settings.json instead, and verify
+// with `gsd-tools worktree base-check` from inside the repo.

@@ -1,0 +1,136 @@
+# <Project> Agent Instructions
+
+<!-- Copy to <repo>/AGENTS.md. Target size: ≤ 6 KB — it is loaded on every
+     session in this repo. Over 10 KB, go looking for content that belongs at
+     another layer (see ../README.md, "The placement test").
+
+     ONE RULE ABOVE ALL: this file holds what an agent CANNOT infer from the
+     codebase and CANNOT read from config. Everything else is somewhere better.
+     -->
+
+<One paragraph: what this system is, what it runs on, and what the system of
+record is. Enough that an agent reading only this knows what it is touching.
+Name the things that are NOT true too, when they are the obvious wrong guess —
+"Slack is an outbound integration, not the record", "this is Web Deploy, not a
+container deployment". Those sentences prevent more wasted work than any
+amount of architecture description.>
+
+## Start here
+
+- Read `README.md` and `.planning/PROJECT.md` for product context.
+- Read `.planning/STATE.md` and `.planning/ROADMAP.md` for current work.
+- Inspect `package.json` / the solution file for current commands. **Do not
+  copy changing stack or milestone state into this file** — it goes stale and
+  then it lies.
+- Preserve unrelated working-tree changes and keep narrow work narrow.
+
+## Running it locally
+
+```text
+<install command>
+<dev server command>
+<test command>
+<lint / typecheck command>
+```
+
+<Anything non-obvious about running it: a service that must be up first, a
+port that is not the default, a build step people forget.>
+
+## Milestone close — repo-specific inputs
+
+<!-- The ritual itself lives in gsd-settings.md §6 and runs unattended. Do NOT
+     restate the gates here. What the ritual cannot know is below, and if any
+     of it is missing the agent has to stop and ask — which is the whole thing
+     this section exists to prevent. -->
+
+| | |
+|---|---|
+| **Base branch** | `<main \| dev>` |
+| **Environments** | `<dev → test → prod, or "single environment">` |
+| **Deploy command** | `<per environment>` |
+| **Watch the deploy** | `<how to follow it to a terminal state — log command, status URL, or CI run>` |
+| **Deployed URL** | `<one per environment — the agent loads these in a browser after deploying>` |
+| **Test / UAT command** | `<command>` |
+| **Tag scheme** | `<e.g. vMAJOR.MINOR, annotated, on the base branch>` |
+| **Rollback** | `<command or procedure>` |
+
+## Safety rules specific to this repo
+
+<Only genuinely repo-specific hazards. Each one should name a concrete thing
+that breaks. Examples of the right shape:
+
+- Never clobber runtime-managed rows from seed or migration scripts; `<script>`
+  may create missing bootstrap rows, but existing `<Table>` rows must survive.
+- Production schema changes are forward-only through `<command>`.
+- Tests must not read or write the production database.
+- `<shared resource>` is high-blast-radius — changing it affects `<other systems>`.
+
+If a rule would be true of every repo we own, it belongs in `global-prompt.md`,
+not here.>
+
+## Domain vocabulary
+
+<Terms that mean something specific here and would be misread otherwise. Skip
+this section if there are none — an empty section is worse than no section.>
+
+## Sources of truth
+
+- `README.md`, `.planning/PROJECT.md` — product and architecture
+- `.planning/STATE.md`, `.planning/ROADMAP.md` — current work
+- `.planning/config.json` — GSD behavior (read it; never restate it here)
+- `<package.json / *.sln>` — commands
+- `<cloudbuild.yaml / .github/workflows/>` — deployment
+- `<schema file>` — data model
+
+---
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     WHAT DOES NOT BELONG IN THIS FILE
+
+     These are the real ones, taken from files that had drifted. Each looks
+     reasonable in isolation, which is why they accumulate.
+
+     1. A VALUE THAT LIVES IN CONFIG.
+        ✗ "Keep .planning/config.json workflow.security_enforcement set to false"
+        The config file holds the value. This sentence cannot enforce it, and
+        goes stale the moment someone changes the setting. If the REASON
+        matters, keep one line of rationale and name the key — never the value.
+
+     2. A RULE THAT IS ALREADY GLOBAL.
+        ✗ "Check whether a dev server is already running before starting one"
+        ✗ "Stop only background servers you started"
+        ✗ "Prefer the browser, then HTTP-only checks"
+        All three are in global-prompt.md, loaded in every session already.
+        The copy here will drift and then contradict the original.
+
+     3. A RESTATEMENT OF THE MILESTONE RITUAL.
+        ✗ "For milestone close, commit the closeout, update the release
+           branch, push, then verify the deploy"
+        gsd-settings.md §6 owns the sequence. Repos that restate it end up
+        with an older version of the ritual that quietly overrides the current
+        one. Give the ritual its INPUTS (above) and nothing else.
+
+     4. A RULE THAT CONTRADICTS A GLOBAL RULE WITHOUT SAYING SO.
+        ✗ "Think carefully before initiating autonomous production deployments"
+        …in a repo whose close ritual is supposed to deploy unattended. If this
+        repo genuinely needs a human gate before production, say exactly that,
+        say why, and mark it as an exception to gsd-settings.md §6.6. An
+        unmarked contradiction just makes the agent pick one at random.
+
+     5. GENERIC GSD OR TOOL GUIDANCE.
+        ✗ "Use /gsd-quick for small fixes, /gsd-debug for bugs"
+        ✗ "How to pick the next milestone number"
+        ✗ "How to name a workstream"
+        True everywhere, so it belongs in gsd-settings.md. A copy here is
+        maintained by nobody.
+
+     6. HISTORY.
+        ✗ Migration research, resolved incidents, superseded decisions.
+        Those go in .planning/ or a retrospective. This file is instructions.
+
+     THE TEST, EVERY TIME YOU ADD A LINE:
+       Could this be config?              → make it config
+       Would it be true in another repo?  → global-prompt.md or gsd-settings.md
+       Would it be true for another CLI?  → it is already in the right place
+       Does it contradict something above it in the stack? → say so explicitly
+     ═══════════════════════════════════════════════════════════════════════ -->

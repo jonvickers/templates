@@ -1,0 +1,51 @@
+# Copy the relevant parts to ~/.codex/config.toml.
+#
+# LAYERING: config only, never prose. Explanations of *why* a value is set go in
+# the Codex-only preamble of ~/.codex/AGENTS.md — not in comments here, because
+# Codex rewrites this file on model upgrades and comments do not always survive.
+#
+# Trimmed to the settings that matter for our setup. A real file also carries
+# plugin enablement, MCP server definitions, per-project trust levels, and
+# desktop/UI preferences that Codex writes itself — leave those alone.
+
+# --- Model and effort -------------------------------------------------------
+# WATCH THIS: Codex rewrites config.toml when it auto-upgrades to a new default
+# model, and the rewrite drops model_reasoning_effort back to the built-in
+# default. Re-check these two lines after any Codex update.
+model = "<current-model-id>"
+model_reasoning_effort = "xhigh"
+
+# --- Autonomy ---------------------------------------------------------------
+# Full autonomy with no sandbox. Correct on a trusted personal dev box; think
+# before copying it to a shared or production-adjacent machine.
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
+[windows]
+sandbox = "elevated"
+
+# --- Features ---------------------------------------------------------------
+[features]
+hooks = true            # required for GSD's lifecycle hooks to run at all
+memories = true
+
+# --- GSD-MANAGED BELOW ------------------------------------------------------
+# Written by the gsd-core installer under this marker:
+#
+#   # GSD Agent Configuration — managed by gsd-core installer
+#
+# Do not hand-edit. Reinstall GSD if it is wrong.
+
+[agents]
+max_depth = 1           # a spawned agent cannot spawn its own
+
+# Codex records a trusted_hash per hook entry. If the hash does not match the
+# entry in ~/.codex/hooks.json, Codex SILENTLY DECLINES TO RUN THAT HOOK — no
+# error, no warning. The count of [hooks.state] entries must equal the number of
+# events in hooks.json; if it does not, some hooks are dead. Reinstall to fix.
+[hooks.state]
+# [hooks.state.'<home>/.codex/hooks.json:session_start:0:0']
+# trusted_hash = "sha256:..."
+# ... one entry per hook event ...
+
+# --- END GSD-MANAGED --------------------------------------------------------

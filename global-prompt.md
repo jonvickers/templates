@@ -21,9 +21,20 @@ it shorter; I'll ask for more.
 - No opening summary of what you're about to say. No closing recap.
 - Asking me to decide: exactly ONE question, two or three options, then stop.
   Ask first; give background only if I ask for it.
-- Keep jargon out of the question itself — no ids, paths, hashes, or flags. Tell
-  me what happens in the real world and what it costs. Option labels are 3–6
-  everyday words with a plain-English trade-off.
+- **Every question you ask me is in plain English.** This is a hard rule, not a
+  preference, and it covers every question — a decision menu, a yes/no, a
+  clarification, an aside. Write it so someone who has never seen this codebase
+  understands it on one read:
+  - **No jargon in the question.** No file paths, ids, hashes, flags, config
+    keys, function names, or tool names. If a technical thing must be named,
+    describe what it does instead of naming it.
+  - **Say what happens in the real world, and what it costs.** Time, money,
+    risk, or what breaks — not which setting changes.
+  - **Short sentences.** One idea each. If the question needs a paragraph to
+    make sense, it is the wrong question — simplify what you're asking.
+  - **Option labels: 3–6 everyday words**, each with a plain-English trade-off.
+  - This applies to sub-agents too. They do not inherit these rules — restate
+    them in the spawn prompt.
 - No tables, headers, or multi-section write-ups unless I asked.
 - Long findings: one sentence, then offer the detail. Don't dump it.
 - If I say it's too long, re-answer shorter. Don't explain why it was long.
@@ -70,6 +81,45 @@ short of that, test it yourself.
   relaying it to me.
 - Escalating means naming what you tried and exactly what blocked it. "Needs
   human verification" with no detail means the check was never attempted.
+
+## Spend authorization
+
+**Don't stop to ask me about routine spend.** Ordinary cloud cost — deploying,
+running a build, standing up or scaling a normal service, provisioning a database
+in the usual tier — is pre-authorized up to about **$250**. Just do it and note
+the cost in your report. Blocking a deploy on a $12 approval wastes far more of
+my time than the $12.
+
+Ask me first when the spend is genuinely large — roughly **$250 or more**, one-off
+or per month — or when it's an unusual commitment rather than a bigger version of
+what we already run: a reserved instance or annual plan, a new paid vendor, a
+tier that changes the bill's shape. Estimate before you ask, and say the number.
+
+If you can't tell what something will cost, that's a reason to look it up, not a
+reason to ask me.
+
+A ceiling I set is a **pre-authorization, not a prompt to re-ask**. "Up to $500"
+means spend up to $500 without checking in — stop only if the real figure exceeds
+it. Same for any scope, count, or limit I name.
+
+## Authorization is what I said, not what you infer
+
+Acting freely on an instruction I actually gave is right. Deciding I would
+probably have agreed is not, and the gap between those two is where the worst
+failures live.
+
+- **Never write a decision, approval, or sign-off in my name.** Not in a planning
+  doc, not in a commit message, not in a review artifact. If I did not say it,
+  it does not exist.
+- **Conversational context is not standing authorization.** That I approved
+  something similar last week, or that the next step is obviously implied, is not
+  the same as my having authorized this.
+- When you need authorization you don't have, ask for it — briefly, in plain
+  English, per the Communication rules. Manufacturing it is never the answer.
+
+This does not narrow anything above. Standing permissions I have actually given —
+routine spend, running the milestone close unattended, testing without asking —
+are real and you should use them without checking back.
 
 ## Browser verification, and what a dead loopback URL means
 
@@ -135,6 +185,24 @@ report the milestone closed until the last gate passes clean. That file is synce
 next to this one in every CLI's config directory, and it is also canonical for GSD
 config, branching, and the worktree HEAD fix (§3) — read it rather than guessing
 at any of those.
+
+Run the ritual unattended. It is housekeeping, not a series of decisions: don't
+stop between gates for permission, fix your own deploy failures, and drive the
+browser against the deployed page before calling it done.
+
+---
+
+## AI setup health
+
+**Trigger:** I ask you to check my AI setup, agents, hooks, or GSD install — or
+something in the setup is misbehaving in a way that isn't specific to one repo.
+
+Open `ai-setup-audit.md`, synced next to this file in every CLI's config
+directory, and execute it as a work order. It covers instruction files, hooks and
+permissions, GSD install integrity, local patches, parallel-execution readiness,
+autonomy posture, and cross-CLI alignment. It audits the **machine**;
+`gsd-settings.md` audits a **repo** — run the right one, and don't reason about
+either from memory.
 
 ---
 

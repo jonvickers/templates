@@ -1,0 +1,87 @@
+// Copy to <repo>/.planning/config.json — strip comments, must be strict JSON.
+//
+// COMMIT THIS FILE. Same reasoning as .claude/settings.json: config travels
+// with the repo so every clone on every machine behaves identically.
+//
+// APPLY WITH THE TOOL, NOT BY HAND:
+//   gsd-tools config-set <key> <value>
+// Hand-overwriting the whole file clobbers sibling keys that GSD wrote and you
+// did not know about. `gsd-tools config-get <key>` reads one back.
+//
+// gsd-settings.md is canonical for every value here. This file is the shape;
+// that file is the reasoning. Where they disagree, gsd-settings.md wins.
+{
+  "model_profile": "quality",      // Opus everywhere except verification
+  "mode": "interactive",           // "yolo" only for trusted autonomous repos
+  "granularity": "standard",
+  "commit_docs": true,             // planning docs tracked in git
+  "parallelization": true,         // pair with workflow.use_worktrees below
+
+  // --- Branching: identical on every repo ---------------------------------
+  // The archetype changes base_branch and NOTHING ELSE.
+  //   main-only repo    → "main"
+  //   dev/test/prod repo → "dev"   (the integration branch, never prod)
+  //
+  // "phase" instead of "milestone" is the one documented exception: a repo
+  // where several people work the SAME milestone at once, so a single
+  // long-lived branch would collide. See gsd-settings.md §2.1.
+  "git": {
+    "branching_strategy": "milestone",
+    "base_branch": "main",
+    "milestone_branch_template": "gsd/{milestone}-milestone",
+    "create_tag": true             // tag the version at complete-milestone
+  },
+
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "nyquist_validation": true,
+    "code_review": true,
+    "code_review_depth": "standard",
+    "ui_phase": true,
+    "ui_safety_gate": true,
+    "ai_integration_phase": true,
+    "ui_review": true,
+    "plan_review_convergence": true,
+
+    "use_worktrees": true,         // parallel executors — REQUIRES the
+                                   // worktree.baseRef fix in the repo's
+                                   // committed .claude/settings.json, or this
+                                   // silently degrades to sequential
+
+    "node_repair": true,
+    "node_repair_budget": 3,
+
+    // MILLISECONDS. 900000 = 15 minutes.
+    // The /gsd-config --advanced prompt mislabels this as "seconds (default
+    // 600)" — that is wrong. Typing 900 sets 0.9 s and every subagent dies
+    // instantly, which looks exactly like a model failure.
+    "subagent_timeout": 900000,
+
+    "tdd_mode": false,
+    "auto_advance": false,
+    "skip_discuss": false,
+    "discuss_mode": "discuss",
+    "text_mode": false
+  },
+
+  // Keep at 200000. Values ≥ 500000 enable adaptive context enrichment, which
+  // overflows the 200k-context models GSD actually spawns → truncation → worse
+  // output. Your interactive session running a 1M model does not change what
+  // spawned agents get.
+  "context_window": 200000,
+
+  "hooks":    { "context_warnings": true },
+  "intel":    { "enabled": true },
+  "graphify": { "enabled": true }   // keep graphify-out/ and .planning/graphs/
+                                    // gitignored; commit .graphifyignore
+}
+
+// DELIBERATELY ABSENT — do not add without a specific reason:
+//   workflow.plan_bounce          needs an external validator script to help
+//   workflow.cross_ai_execution   offloads execution to another AI CLI
+//   workflow.auto_prune_state     prompt-before-prune is safer
+//   model_policy.*                redundant with model_profile, and creates a
+//                                 second conflicting model-selection system
+//   search_gitignored             repo-specific; leave false unless you mean it

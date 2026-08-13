@@ -1,0 +1,80 @@
+# User-level instructions for Claude Code
+
+Apply to every project. Project CLAUDE.md may add more, not contradict.
+
+The two imports below hold the shared cross-agent rules. `global-prompt.md` is
+synced from `jonvickers/templates`; `global-machine.md` is mastered right here,
+kept out of that public repo. Edit sources and rerun `sync-global-prompt.ps1`,
+never the copies.
+
+@global-prompt.md
+@global-machine.md
+
+`gsd-settings.md` and `ai-setup-audit.md` are synced here too but deliberately
+**not** imported — they are read on demand, so they cost no context until an
+agent needs them. `gsd-settings.md` is canonical for GSD config, branching, the
+worktree HEAD fix, review lanes (§7), and the milestone close ritual (§6).
+`ai-setup-audit.md` is the work order for checking this machine's setup. Read
+either on demand; don't reason about their contents from memory.
+
+Everything below is Claude-Code-specific and has no equivalent in the other CLIs.
+If a rule here would apply equally to Codex or Gemini, it is in the wrong file —
+move it to `global-prompt.md`.
+
+## Shell tools
+
+The **Bash tool runs Git Bash** (`/usr/bin/bash`), not PowerShell, despite
+`CLAUDE_CODE_USE_POWERSHELL=1`. Use the **PowerShell tool** (pwsh 7.x) for
+PowerShell syntax, the **Bash tool** for POSIX. Match the tool to the syntax.
+
+Beware passing shell-expanded paths into `node -e`: Git Bash hands over an MSYS
+path (`/c/Users/...`) that Node on Windows cannot resolve, and the read fails
+silently rather than erroring. `cd` first and use a relative path.
+
+Your foreground Bash cap is 600 s — anything slower must run in the background.
+
+## Plain English in AskUserQuestion
+
+`AskUserQuestion` prompts, questions, and option labels follow the Communication
+rules in `global-prompt.md` — that includes questions asked by sub-agents, which
+do **not** inherit those rules automatically. Restate them in the spawn prompt.
+
+## Drive the browser yourself
+
+If a task needs a browser — clicking through a cloud console, an OAuth consent
+screen, a vendor portal, a settings page — **use the claude-in-chrome tools and do
+it**. Do not hand me a link and a numbered list of clicks. That is the same rule as
+"Test it yourself first" in `global-prompt.md`, applied to the browser: asking me
+to click is the exception, and it needs a real reason (a credential only I hold,
+an MFA prompt on my phone, a decision that is genuinely mine).
+
+Before claiming a browser step is impossible, **check whether the tools are
+actually loaded in the session** — search the tool registry for the `tabs_*` /
+`switch_browser` surface. If they are loaded, use them. If they are genuinely
+absent, say so in those words ("no browser tools in this session"), because that is
+a fact about the session, not about the task, and I may want to restart with them
+enabled rather than click through it myself.
+
+## claude-in-chrome specifics
+
+These tools don't drive my regular Chrome — they run a separate browser hosted by
+`claude.exe --chrome`, organized into persistent "tab groups." That's step 3 of the
+loopback ladder: when curl works, you're on the right machine, and LAN IPs plus
+public sites load while *every* loopback URL returns `ERR_CONNECTION_REFUSED`, the
+tab group is wedged. The bad state lives in the MCP runtime, so closing my Chrome
+does nothing.
+
+**Recovery:** close every tab in the group with `tabs_close_mcp` (the group
+auto-removes with its last tab), call `tabs_context_mcp createIfEmpty:true` for a
+fresh one, then re-probe a single loopback URL before resuming.
+
+Use `switch_browser` for step 2 — connecting to the Chrome that is actually on the
+server's machine, which also gets you a full window.
+
+## Subagent tool surfaces
+
+GSD subagents (`gsd-verifier`, `gsd-code-reviewer`, executors, general-purpose)
+have deliberately restricted tool surfaces and may not be able to start services
+or see ambient credentials you can. This is why a subagent's
+`status: human_needed` needs re-checking from the orchestrator session before it
+reaches me.

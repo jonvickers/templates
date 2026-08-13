@@ -1,0 +1,54 @@
+// Copy to <repo>/.claude/settings.json — strip comments, must be strict JSON.
+//
+// COMMIT THIS FILE. It is shared config: every clone on every machine needs it,
+// and the worktree fix below does not work unless it travels with the repo.
+// Confirm it is not gitignored: `git check-ignore -v .claude/settings.json`
+// should print nothing.
+//
+// The minimum conforming file is just the worktree block. Everything else is
+// optional and repo-specific.
+{
+  // REQUIRED ON EVERY REPO.
+  //
+  // Parallel executors run in git worktrees, and the harness forks each one
+  // from origin/HEAD rather than the branch you are on. With our milestone
+  // branching standard, HEAD is a milestone branch for the entire life of the
+  // milestone — never origin/HEAD — so without this the fork base mismatches
+  // every single time. GSD then drops to sequential execution or the executor
+  // halts with exit 42.
+  //
+  // It must be HERE, in the repo's committed settings.json. A copy in
+  // ~/.claude/settings.json or in settings.local.json looks applied and does
+  // nothing — GSD's base-check does not read it from either.
+  //
+  // Verify from inside the repo:
+  //   gsd-tools worktree base-check
+  //   → { "shouldDegrade": false, "reason": "baseref-head" }
+  "worktree": {
+    "baseRef": "head"
+  },
+
+  // Optional: grants that are true for THIS repo and every person working in
+  // it. Machine-wide grants belong in ~/.claude/settings.json instead.
+  "permissions": {
+    "allow": [
+      "Bash(gsd-tools query *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  },
+
+  // Optional: repo-specific environment. Example — a repo whose test suite
+  // legitimately runs longer than the default shell timeout.
+  "env": {
+    "BASH_MAX_TIMEOUT_MS": "1800000"
+  }
+}
+
+// SIBLING FILE: .claude/settings.local.json is gitignored and holds ONLY values
+// that genuinely differ per machine. If a value would be identical for every
+// developer, it does not belong there — promote it here so it travels.
+//
+// In particular, worktree.baseRef in settings.local.json is a common mistake:
+// it is invisible to base-check, so the repo looks configured and silently runs
+// one agent at a time.

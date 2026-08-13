@@ -1,0 +1,23 @@
+# Claude Code
+
+@AGENTS.md
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     THIS FILE IS A POINTER. That is its whole job.
+
+     AGENTS.md is the canonical instruction file because every other tool
+     (Codex, Gemini, Cursor, opencode) reads it directly and only Claude Code
+     reads CLAUDE.md. One file means every tool gets identical rules.
+
+     Never put a rule here. A rule in CLAUDE.md is a rule that Claude follows
+     and no other CLI can see — which is exactly how two agents on the same
+     repo start disagreeing, with nothing in the diff to explain why.
+
+     Some repos add a few lines of prose above the import, for the case where
+     an agent was told "read ./CLAUDE.md" and does a plain file read (the
+     @import does not expand for that). That is fine — it is signage, not
+     rules. Keep it to a sentence or two:
+
+         **All project instructions live in `AGENTS.md` in this same
+         directory. Read that file now — this one is only a pointer.**
+     ───────────────────────────────────────────────────────────────────────── -->

@@ -59,9 +59,10 @@ report. **Do not commit unless the user asks.**
    `subagent_timeout` must be **milliseconds** (e.g. `900000`, never `900`);
    `context_window` stays `200000` unless spawned agents truly have ≥500k context;
    `mode` should be `interactive` unless this is a trusted autonomous repo.
-5. **Parallel milestones?** Do **not** change branching for it — set up a
-   **workstream** per milestone instead ([§2.2](#22-parallel-work-workstreams-vs-workspaces)).
-6. **Set up Graphify sanely** ([§4.1](#41-graphify-setup-required-for-gsd-graph-context)).
+5. **Parallel milestones?** Each developer needs **both** a workstream and their
+   own milestone branch ([§2.2](#22-parallel-work-workstreams-vs-workspaces)) —
+   the branching strategy stays `milestone` either way.
+6. **Set up Graphify sanely** ([§4.1](#41-graphify-setup--required-for-gsd-graph-context)).
    Confirm the Graphify CLI is installed on this machine, GSD graphify is enabled,
    generated graph caches are gitignored, repo Graphify hooks are not installed,
    and `.graphifyignore` excludes planning/generated/tool-state noise.
@@ -78,15 +79,16 @@ report. **Do not commit unless the user asks.**
 1. **Two repo archetypes.** *Main-only* (everything integrates to `main`) and
    *dev/test/prod* (where **`dev` is the default branch**, `test`/`prod` are
    environment branches managed by CI/release — **not** by GSD).
-2. **Branching strategy and parallel work are different layers.**
-   `git.branching_strategy` only decides *who cuts feature branches and how often*.
-   Running two milestones in parallel is solved by **workstreams**, not branching.
-   When we branch at all, we branch per **phase**, never per milestone
-   (see [§2.1](#21-branching-strategy--pick-by-integration-cadence-not-by-vocabulary)).
+2. **One branch per milestone, everywhere** (`branching_strategy: "milestone"`),
+   paired with **one workstream per developer**. The branch keeps their code
+   apart, the workstream keeps their planning files apart — you need both
+   (see [§2.1](#21-branching-strategy--milestone-is-the-house-standard) and
+   [§2.2](#22-parallel-work-workstreams-vs-workspaces)).
 3. **The worktree HEAD fix is mandatory on every repo** that wants parallel agent
    execution — without it, worktree spawns mismatch whenever `HEAD` differs from
-   `origin/HEAD` (on phase-branching repos: **always**, even fully pushed), and
-   GSD drops to sequential or the executor halts with exit 42.
+   `origin/HEAD`, which with milestone branching is **always**, for the whole life
+   of the milestone, even fully pushed. GSD then drops to sequential or the
+   executor halts with exit 42.
 4. **A few settings are landmines** — read [§5](#5-settings-that-need-special-attention)
    before changing anything. The worst one: `subagent_timeout` is in
    **milliseconds**, not seconds.
@@ -100,25 +102,26 @@ report. **Do not commit unless the user asks.**
 
 If you remember nothing else from this file, remember these:
 
-1. **Count the branches, not the people.** Developer count never changes the
-   branching setup — only the repo's branch layout does.
-2. **Main-only repo → GSD works directly on `main`.** No feature branches, no
-   merging: `branching_strategy = "none"`, `base_branch = "main"`.
-3. **Dev/test/prod repo → GSD works off `dev`, and only `dev`.** GSD cuts a
-   short-lived branch per phase and merges it back into `dev`:
-   `branching_strategy = "phase"`, `base_branch = "dev"`. Promoting
-   `dev → test → prod` is a human/CI job — GSD never touches it.
-4. **Multiple people or milestones at once → add a workstream, don't change
-   branching.** Workstreams give each parallel effort its own planning folder
-   so state files never collide; the `git` block from rules 2–3 stays exactly
-   the same.
+1. **One branch per milestone, on every repo.** `branching_strategy =
+   "milestone"`. The milestone is what we version, review, tag, and deploy, so it
+   is what gets a branch.
+2. **The archetype only decides where that branch starts and ends.** Main-only →
+   `base_branch = "main"`. Dev/test/prod → `base_branch = "dev"`, and only `dev`;
+   promoting `dev → test → prod` is a human/CI job GSD never touches.
+3. **One developer per open milestone, each in their own workstream.** The
+   workstream keeps their planning files apart; the milestone branch keeps their
+   commits apart. You need both.
+4. **Two people on the *same* milestone is the one exception.** Drop that repo to
+   `branching_strategy = "phase"` — a single long-lived branch shared by two
+   people is the case milestone branching handles badly.
 
 | Repo | Branching config | Extra step |
 |---|---|---|
-| Single dev, main only | Rule 2 (`none` + `main`) | none |
-| Multi dev, main only | Rule 2 (`none` + `main`) | one workstream per person/milestone |
-| Single dev, dev/test/prod | Rule 3 (`phase` + `dev`) | none |
-| Multi dev, dev/test/prod | Rule 3 (`phase` + `dev`) | one workstream per person/milestone |
+| Single dev, main only | `milestone` + `main` | none |
+| Multi dev, main only | `milestone` + `main` | one workstream per person |
+| Single dev, dev/test/prod | `milestone` + `dev` | none |
+| Multi dev, dev/test/prod | `milestone` + `dev` | one workstream per person |
+| Several people, one milestone | `phase` + archetype's base | one workstream per person |
 
 Plus the one mandatory extra on every repo regardless of row: the
 [worktree HEAD fix](#3-the-worktree-head-fix-required-on-every-repo) in the
@@ -137,10 +140,12 @@ is manual or from a SHA, and code review happens via cross-AI CLIs rather than a
 GitHub PR gate. *Example: alpine-manager.*
 
 - `git.base_branch = "main"`
-- `git.branching_strategy = "none"` — GSD commits to whatever branch is checked
-  out (i.e. `main`). You branch by hand only if you ever want to.
-- Parallel milestones, if they ever happen → **workstreams** (see [§2.2](#22-parallel-work-workstreams-vs-workspaces)),
-  *not* a branching-strategy change.
+- `git.branching_strategy = "milestone"` — GSD cuts one branch per milestone off
+  `main` and merges it back at `complete-milestone`. Same rule as Archetype B;
+  only the base branch differs.
+- Parallel milestones → **one workstream per developer** as well
+  ([§2.2](#22-parallel-work-workstreams-vs-workspaces)). The branch and the
+  workstream are both needed, not either/or.
 
 ### Archetype B — `dev` / `test` / `prod`
 
@@ -148,19 +153,17 @@ Larger repos with an environment pipeline. **`dev` is the default/integration
 branch**; `test` is staging; `prod` is production. Work flows
 `feature → dev → test → prod`.
 
-**Key boundary:** GSD only ever produces **short-lived feature branches that fork
-from and merge back into ONE base branch.** GSD does **not** promote
-`dev → test → prod` — that is your CI/release process and lives entirely outside
-GSD.
+**Key boundary:** GSD only ever produces **branches that fork from and merge back
+into ONE base branch.** GSD does **not** promote `dev → test → prod` — that is
+your CI/release process and lives entirely outside GSD.
 
 - `git.base_branch = "dev"` ← point GSD at the integration branch, never `prod`.
-- `git.branching_strategy = "phase"` — **the house standard**: GSD auto-creates a
-  feature branch per phase off `dev` and merges it back (hands-off branching).
-  - `"none"` is the documented exception, for teams that insist on cutting
-    feature branches by hand off `dev` and letting GSD commit to the current
-    branch.
-  - `"milestone"` is **not** used — see the house decision in
-    [§2.1](#21-branching-strategy--pick-by-integration-cadence-not-by-vocabulary).
+- `git.branching_strategy = "milestone"` — **the house standard**: GSD
+  auto-creates one branch per milestone off `dev` and merges it back at
+  `complete-milestone` (hands-off branching).
+  - `"phase"` is the documented exception, for a repo where several people work
+    the same milestone at once ([§2.1](#21-branching-strategy--milestone-is-the-house-standard)).
+  - `"none"` only for throwaway repos and spikes.
 - `dev → test → prod` promotion: your normal Git/CI flow. GSD never touches it.
 
 > **"Auto-create vs manual" = who runs `git checkout -b`.**
@@ -172,30 +175,35 @@ GSD.
 
 ## 2. Branching & parallel work
 
-### 2.1 Branching strategy — pick by integration cadence, not by vocabulary
+### 2.1 Branching strategy — milestone is the house standard
 
 | Strategy | Branch created | Merges back | Use when |
 |---|---|---|---|
-| `none` | never (GSD uses current branch) | n/a | **Our standard for main-only repos (Archetype A).** Also for teams that manage branches by hand. (GSD's shipped default.) |
-| `phase` | per phase, at execute-phase start | after each phase (frequent, small) | **Our standard for dev/test/prod repos (Archetype B).** GSD-managed feature branches; works even with high code overlap between parallel work. |
-| `milestone` | once per milestone | once at `complete-milestone` (one big merge) | **Not used — see house decision below.** Only theoretically defensible when parallel lines of work barely overlap in code. |
+| `milestone` | once per milestone, at its first execute-phase | once at `complete-milestone` | **Our standard, on every repo and every archetype.** One developer owns one milestone; the milestone is the unit of review and release. |
+| `phase` | per phase, at execute-phase start | after each phase | Fallback when one milestone is genuinely worked by several people at once, so a single shared milestone branch would collide. |
+| `none` | never (GSD uses current branch) | n/a | Throwaway repos, spikes, and sandboxes where no review gate exists. GSD's shipped default — not ours. |
 
-**House decision — phase, not milestone.** For repos that branch at all
-(Archetype B), we branch per **phase**. The difference is how long a branch
-lives before it merges back: a phase branch lives hours-to-days and merges
-while the changes are fresh; a milestone branch lives for *weeks* while `dev`
-keeps moving, then lands as one giant merge where all the accumulated drift
-collides at once. `milestone` is defensible only when you want one clean
-"PR per release" **and** parallel work barely touches the same files — and that
-second condition almost never holds, least of all in multi-developer repos.
-If you want a clean milestone-wide review PR anyway, you don't need milestone
-branching for it: `/gsd-pr-branch` assembles one after the fact while the
-day-to-day work still integrates per phase.
+**House decision — milestone.** It matches how we actually work: one developer
+takes a milestone (`v1.1`, `v1.2`, …) in their own workstream, works it to
+completion, and lands it as one reviewable unit. GSD names the branch from
+`milestone_branch_template`, so every phase in that milestone reuses one branch
+(`gsd/v2.6-milestone`) and `complete-milestone` merges it.
 
-**Rule of thumb:** branch granularity should match how often you can integrate.
-**High file overlap → integrate often → `none` (trunk) or `phase`. Avoid
-long-lived `milestone` branches when work overlaps** — they maximize divergence
-and produce one brutal merge.
+Why this beats per-phase branching for us: the milestone is the thing we version,
+tag, review, and deploy. Branching per phase splits one deliverable across a
+half-dozen short branches that each land separately, so there is no single place
+to review `v2.6` before it reaches `dev`, and the version tag ends up describing
+commits that arrived piecemeal.
+
+**One developer per milestone is what makes this safe.** Milestone branches are
+long-lived, so the cost is drift: `dev` keeps moving while the branch is open, and
+everything that diverged collides at the merge. That cost stays small only when
+each open milestone is owned by one person and touches a distinct area. If two
+people must work the *same* milestone at once, drop that repo to `phase` — a
+shared long-lived branch is the one case milestone branching handles badly.
+
+**Pull from the base branch regularly while a milestone is open.** This is the
+whole mitigation for drift, and it is a habit, not a setting.
 
 **The truth no setting can change:** two agents editing the same file at the same
 time = a Git merge conflict at integration. Branching, workstreams, and workspaces
@@ -233,16 +241,120 @@ directory with its own Git worktree/clone on its own branch
 | Two agent/Claude sessions on **one machine**, possibly overlapping code | **Workspaces** (separate worktrees). On Windows prefer `--strategy clone` over the default worktree, given Windows worktree friction. |
 | Single line of work | Neither — plain GSD. |
 
-**Workstreams are the necessary piece for parallel committed milestones**
-(they stop STATE/ROADMAP conflicts). A branching-strategy choice is *optional* on
-top and does not substitute for them.
+**Workstreams and milestone branching are both required, and they solve different
+halves of the same problem.** A workstream isolates *planning* — each developer's
+`STATE.md` / `ROADMAP.md` lives at its own path, so two open milestones never
+collide on a planning file. The milestone branch isolates *code* — each
+developer's commits land on their own branch until the milestone is merged.
 
-Set up when a second engineer/milestone actually starts:
+Use them together, one of each per developer:
+
+| Developer | Workstream | Milestone branch |
+|---|---|---|
+| first | `.planning/workstreams/jv/` | `gsd/v2.6-milestone` |
+| second | `.planning/workstreams/jw/` | `gsd/v2.7-milestone` |
+
+Neither substitutes for the other. Workstreams alone leave both developers
+committing to the same branch; a milestone branch alone leaves them fighting over
+`STATE.md`.
+
+Set up when a second engineer actually starts:
 
 ```bash
-gsd-tools query workstream.create <milestone-name>
-# then: /gsd-new-milestone --ws <milestone-name>
+gsd-tools query workstream.create <name>
+# then: /gsd-new-milestone --ws <name>
 ```
+
+### 2.2.1 Name workstreams after people, not topics
+
+A lane exists to keep two concurrent efforts from colliding on one `STATE.md`,
+and that maps to **who** is working, not what they are working on. Use lowercase
+initials — `jv`, `ym`, `jm`, `jw`.
+
+A person's lane carries milestone after milestone: the same `jv` lane runs v2.1,
+then v2.4, then v2.6, with each closed milestone archived under
+`.planning/workstreams/jv/milestones/`. A lane named after a topic hosts exactly
+one milestone and is a dead directory ever after — don't create one by default.
+
+**The single exception:** `STATE.md` holds one `milestone:` field, so one person
+cannot run two milestones concurrently in one lane. That overflow case — and only
+that case — justifies a topic-suffixed lane like `jv-db-scaling`. Retire it when
+its milestone ships rather than leaving a permanent extra lane standing.
+
+In a repo with workstreams, pass `--ws <name>` on **every** GSD command. There is
+no root-level `.planning/STATE.md`, so omitting the flag makes `gsd-tools` fail
+with `STATE.md not found` rather than silently reading the wrong lane.
+
+### 2.3 Planning for parallel execution — wave width
+
+**This is the single biggest cause of `/gsd-autonomous` stopping constantly, and
+it is fixed at planning time. No runtime setting compensates for it.**
+
+GSD runs plans concurrently only **within a wave**. `parallelization: true` and
+`use_worktrees: true` give you the capability; the plan topology decides whether
+there is anything to parallelize. A phase planned as a near-serial chain executes
+serially no matter how many agents are available — measured across five
+consecutive phases in one repo, every one had been planned as mostly one-plan
+waves while `parallelization: true` had been set the entire time.
+
+**Targets when planning a phase:**
+
+- **Median wave width ≥ 3.** A phase whose waves are mostly one plan will execute
+  single-file regardless of available agents.
+- **At most a third of waves may hold a single plan.** Those should be genuine
+  serialization points — a migration, a contract freeze — not the default.
+- **Every plan declares accurate `files_modified`.** Two plans in one wave sharing
+  any file silently drops that wave to sequential, and an **empty** list defeats
+  the overlap check entirely.
+- **Hoist decisions to the front.** Human approvals, paid-call gates, and
+  production effects belong at the start of a phase or in their own phase — never
+  mid-chain. A gate buried at wave 12 of 36 blocks 24 waves of work behind it.
+  Checkpoints, not agent count, are the real serializer.
+
+Read the topology before dispatching:
+
+```bash
+gsd-tools phase-plan-index <phase> --json     # plan count, waves, widths
+```
+
+Some repos carry a gate script that turns these targets into an exit code; where
+one exists it is named in that repo's `AGENTS.md` and running it is mandatory
+before dispatch. Prose targets alone have a poor track record — they were written
+down for months in the repo above and did not hold.
+
+**If the topology is bad, replan before executing.** Group work into bounded
+ownership lanes with disjoint file sets. Splitting the roadmap phase is a last
+resort, for when the plans genuinely cannot run as lanes.
+
+**When a phase is honestly serial** — each step consumes the previous step's
+output — say so in the plan and keep it short. A genuinely serial 6-plan phase is
+fine; a 55-plan serial phase is a planning failure, not a hard problem.
+
+**Before starting an autonomous run**, confirm there is enough parallel work to be
+worth it. A milestone with one phase left, or one blocked phase, gives autonomous
+nothing to do — it will start, hit the wall, and stop. That is not a tooling
+fault, and re-running will not help.
+
+Finally, don't let gap-closure replanning grow a phase without bound. If executing
+a phase keeps appending new plans instead of retiring incomplete ones, stop and
+re-scope the phase rather than continuing to plan.
+
+### 2.4 Picking the next milestone version
+
+With milestone branching, the version is also a branch name, so two people
+choosing the same number collide on a shared branch. Resolve it from the remote,
+not from memory, and never make the user do it:
+
+1. `git fetch origin --prune`.
+2. Inspect `.planning/MILESTONES.md` **and** remote `origin/gsd/v*` branches.
+3. Treat every remote milestone version as **reserved**, even before merge.
+4. Select the next unused version after the highest completed or remotely
+   reserved one.
+5. Re-check immediately before the first push, and renumber on collision.
+6. Push the initialized milestone branch promptly so other machines see it.
+
+If the remote cannot be fetched, **stop before assigning a version** rather than
+risk two active milestones with the same number.
 
 ---
 
@@ -251,13 +363,14 @@ gsd-tools query workstream.create <milestone-name>
 Parallel executor agents run in Git worktrees (`workflow.use_worktrees: true`).
 By default the harness forks each worktree from **`origin/HEAD`** — *not* from the
 branch you are working on. Any time `HEAD ≠ origin/HEAD`, the fork base mismatches.
-That happens whenever the default branch has unpushed commits — and on Archetype B
-repos it is **guaranteed during every phase**, because with
-`branching_strategy: "phase"` the working branch is by construction ahead of
+That happens whenever the default branch has unpushed commits — and with our
+`branching_strategy: "milestone"` standard it is **guaranteed for the entire life
+of every milestone**, because the milestone branch is by construction ahead of
 `origin/HEAD` (phase commits, pre-dispatch PLAN.md commits). Pushing doesn't help:
-a phase branch is never `origin/HEAD`. (Verified live on dental-payz, 2026-06-12:
-a worktree spawned from a phase branch came up on the `dev` tip, not the phase
-HEAD.)
+a milestone branch is never `origin/HEAD`. This is why the fix is mandatory on
+every repo rather than a tuning option. (Verified live on dental-payz,
+2026-06-12: a worktree spawned from a working branch came up on the `dev` tip,
+not the branch HEAD.)
 
 Same root cause, two symptoms depending on the workflow:
 
@@ -371,8 +484,10 @@ unless a repo-specific note says otherwise.
 
 ```jsonc
 "git": {
-  "branching_strategy": "none",
-  "base_branch": "main"
+  "branching_strategy": "milestone",   // house standard, every repo (§2.1)
+  "base_branch": "main",
+  "milestone_branch_template": "gsd/{milestone}-milestone",
+  "create_tag": true                   // tag the version at complete-milestone (§6.6)
 }
 ```
 
@@ -380,10 +495,22 @@ unless a repo-specific note says otherwise.
 
 ```jsonc
 "git": {
-  "branching_strategy": "phase",   // house standard. "none" only if engineers branch by hand; never "milestone".
-  "base_branch": "dev"             // the DEFAULT/integration branch — never prod
+  "branching_strategy": "milestone",   // house standard, every repo (§2.1)
+  "base_branch": "dev",                // the DEFAULT/integration branch — never prod
+  "milestone_branch_template": "gsd/{milestone}-milestone",
+  "create_tag": true
 }
 ```
+
+The archetype changes **only** `base_branch`. Branching strategy is the same
+everywhere; use `phase` solely for the exception in [§2.1](#21-branching-strategy--milestone-is-the-house-standard)
+(several people working one milestone at once).
+
+Keep `milestone_branch_template` identical across repos so branch names are
+predictable — `gsd/v2.6-milestone`, not a per-repo variant. A repo carrying two
+naming patterns at once (`gsd/v2.5-milestone` alongside
+`gsd/v2.5-some-slug`) has had the template changed mid-flight; pick one and let
+the old branches age out.
 
 > `search_gitignored` is **repo-specific** — `true` only if you deliberately want
 > broad searches to include gitignored paths (e.g. a repo that commits `.planning/`
@@ -521,10 +648,11 @@ These are the ones that bite. Read before touching.
 | **`workflow.subagent_timeout`** | **In MILLISECONDS.** The `/gsd-config --advanced` prompt mislabels it as "seconds (default 600)" — that's wrong; the runtime default is `300000` (5 min). We use `900000` (15 min) for Opus deep-reasoning headroom. **Typing `900` sets 0.9s and times out every subagent instantly.** |
 | **`context_window`** | Keep `200000` unless the agents GSD *spawns* truly run a 1M-context model. Your interactive session being on a 1M model does **not** mean spawned agents are — they use the standard Opus tier (200k). Values `≥ 500000` enable adaptive context enrichment, which would overflow 200k agents → truncation → worse output. |
 | **`commit_docs` + `/gsd-pr-branch`** | `commit_docs: true` keeps planning in git, and (because it's `true`) GSD does **not** strip `.planning/` at merge. But `/gsd-pr-branch` *deliberately* strips `.planning/` to make a clean review PR. If you merge **only** that stripped branch, planning never reaches the default branch. Always merge the real branch (squash/full) to land planning; use pr-branch only as a review artifact. |
-| **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). Doesn't travel via git unless committed in shared `settings.json`. With `branching_strategy: "phase"` the mismatch is otherwise *guaranteed* (a phase branch is never `origin/HEAD`). A value only in user-level `~/.claude/settings.json` is invisible to GSD's `base-check` — set it per repo. |
+| **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). Doesn't travel via git unless committed in shared `settings.json`. With `branching_strategy: "milestone"` (or `"phase"`) the mismatch is otherwise *guaranteed* — a milestone branch is never `origin/HEAD`. A value only in user-level `~/.claude/settings.json` or `settings.local.json` is invisible to GSD's `base-check`; it looks applied and does nothing. Set it per repo, in the committed file. |
 | **`workflow.use_worktrees` on Windows** | Windows has known worktree/merge friction (merge-rollback, base mismatch). The §3 HEAD fix resolves the common mismatch. If worktree merges still misbehave, set `use_worktrees: false` (sequential) as the escape hatch. |
 | **`mode: "yolo"`** | Runs phases autonomously with no approval gates. Fine for a trusted single-owner repo (alpine-manager uses it). New/shared repos should usually start `"interactive"`. |
-| **`git.branching_strategy: "milestone"`** | **Not our standard — don't use it.** Long-lived milestone branches maximize merge pain; prefer `none`/`phase` and integrate often. For a clean milestone-wide review PR, use `/gsd-pr-branch` instead (see §2.1). |
+| **`git.branching_strategy: "milestone"`** | Our standard (§2.1), and it carries one real cost: the branch is long-lived, so `dev` drifts underneath it. Pull from the base branch regularly while the milestone is open, and keep one developer per open milestone. Two people on one milestone → use `phase` for that repo. |
+| **`git.milestone_branch_template`** | Changing it mid-project orphans the branch GSD was already using — the next execute-phase creates a *second* branch for the same milestone under the new name and the earlier work sits on the old one. Change it only between milestones. |
 | **Graphify caches** | Keep `graphify-out/` and `.planning/graphs/` local/ignored. Commit `.graphifyignore`, not generated graph JSON. Install the Graphify CLI per computer; refresh with `$gsd-graphify build`; do not rely on repo hooks. |
 | **`max_discuss_passes`** | Leave at `3`. Raising it increases how many rounds of questions discuss-phase asks you — more interruption, not more quality, in interactive use. |
 
@@ -546,9 +674,20 @@ These are the ones that bite. Read before touching.
 **Trigger:** a GSD milestone is being closed — `/gsd-complete-milestone`, "close
 the milestone", or the last phase of a milestone passing verification.
 
-**Rule:** run gates 1–7 in order. Do not report the milestone closed until gate 7
-passes clean. Repo-specific deploy and test commands live in that repo's
-`AGENTS.md`; if they aren't written down, ask once and write them there.
+**Rule:** run gates §6.1 through §6.8 in order. Do not report the milestone closed
+until the last gate passes clean.
+
+**Run the whole ritual autonomously.** It is housekeeping with a known-good end
+state, not a series of decisions. Do not stop between gates to ask permission to
+continue, and do not ask me to authorize routine deploy spend
+(see *Spend authorization* in `global-prompt.md`). Stop only for the three things
+this file says to stop for: unmerged or unpushed work you did not create, a
+public-repo secret, or the same failure surviving two fix attempts.
+
+**Repo-specific inputs** — the deploy command, the test command, the environment
+URLs, and the tag scheme — live in that repo's `AGENTS.md`. If they aren't
+written down, ask once, then write them there so the next close doesn't ask
+again.
 
 ### 6.1 Worktrees
 
@@ -591,10 +730,13 @@ passes clean. Repo-specific deploy and test commands live in that repo's
 Audit the repo's `.planning/config.json` plus the global GSD defaults against this
 file. Assert:
 
-- Parallel work is coherent end to end: `parallelization`,
-  `workflow.use_worktrees`, `git.branching_strategy`, and `git.base_branch` all
-  agree with the repo's archetype ([§1](#1-the-two-repo-archetypes),
-  [§2](#2-branching--parallel-work)).
+- Parallel work is coherent end to end: `parallelization` and
+  `workflow.use_worktrees` are on, `git.branching_strategy` is `milestone`
+  (or `phase` for the documented exception), and `git.base_branch` matches the
+  archetype ([§1](#1-the-two-repo-archetypes), [§2](#2-branching--parallel-work)).
+- Every open milestone has exactly one owner, and every owner has their own
+  workstream ([§2.2](#22-parallel-work-workstreams-vs-workspaces)). Two people on
+  one milestone branch is the drift case §2.1 warns about.
 - The worktree HEAD fix is present
   ([§3](#3-the-worktree-head-fix-required-on-every-repo)).
 - `claude_md_path` points at a file that actually exists.
@@ -606,30 +748,53 @@ file. Assert:
 
 Commit any drift fixes separately as `chore(planning):`.
 
-### 6.6 Commit → push → merge → deploy → test
+### 6.6 Commit → push → merge → tag → deploy → watch → test
 
-1. Commit everything outstanding — atomic, conventional messages.
-2. Push the milestone branch.
-3. Merge into the base branch per archetype, then promote all the way to
+Work these in order, one environment at a time. A failing environment blocks
+promotion to the next.
+
+1. **Commit** everything outstanding — atomic, conventional messages.
+2. **Push** the milestone branch.
+3. **Merge** into the base branch per archetype, then promote all the way to
    production — Archetype A: into `main`; Archetype B: `dev` → `test` → `prod`.
    Use a PR where the repo expects one. Never force-push a shared branch.
-4. Deploy each environment you promoted into, using the repo's documented
-   command. Deploy and test one environment at a time — a failing environment
-   blocks promotion to the next.
-5. Test for real, against the milestone's UAT criteria: web UI → drive the
-   browser and actually look at the rendered page; API → curl the endpoint; data
-   → query it. Keep the screenshot, response, or log as evidence. Re-run the same
-   checks against production after the prod deploy — a green `test` environment
-   is not evidence that prod is up.
-6. If production is broken and the fix isn't immediate, roll prod back to the
+4. **Tag** the milestone on the base branch once the merge has landed, and push
+   the tag. With `git.create_tag: true` (our baseline, §4) `complete-milestone`
+   creates it for you — confirm it exists and is pushed rather than making a
+   second one. If you are tagging by hand, read the repo's existing scheme with
+   `git tag --list` and match it exactly rather than inventing one; annotated
+   (`git tag -a`) naming the milestone is the default. If the repo has never been
+   tagged, ask once and record the answer in its `AGENTS.md`.
+5. **Deploy** each environment you promoted into, using the repo's documented
+   command.
+6. **Watch the deploy to completion.** Firing the command is not deploying.
+   Follow the build/release until it reports a terminal state — stream the
+   provider's logs, poll the deployment status, or watch the CI run. A deploy
+   that is still building is not a deploy that succeeded, and a green command
+   exit is not a green deploy.
+7. **Test for real**, against the milestone's UAT criteria:
+   - **Web UI → drive the browser yourself.** Load the deployed URL, look at the
+     rendered page, click the paths this milestone touched, and read the console
+     for errors. A 200 from `curl` is not evidence the interface works.
+   - **API** → curl the endpoint. **Data** → query it.
+   - Keep the screenshot, response, or log as evidence.
+8. **Re-run the same checks against production** after the prod deploy. A green
+   `test` environment is not evidence that prod is up.
+9. If production is broken and the fix isn't immediate, **roll prod back** to the
    last good deploy first, then fix forward on a lower environment.
 
-### 6.7 Fix and repeat
+### 6.7 Fix deployment failures yourself, then repeat
 
-Any failure in gate 6.6 → fix the root cause, not the symptom, commit the fix, and
-re-run from the earliest affected gate. Loop until one clean pass. If the same
-failure survives two fix attempts, stop and report the exact error and what was
-tried.
+Any failure in gate 6.6 — including a failed build, a failed deploy, and a broken
+page after a successful deploy — is yours to fix. Read the deploy logs, find the
+root cause, fix it, commit, and re-run from the earliest affected gate. Loop until
+one clean pass, and re-drive the browser after every fix rather than assuming the
+last failure was the only one.
+
+Do not hand me a deploy error and wait. Do not report the milestone closed with a
+deploy still red. Stop and report only when the **same** failure survives two
+distinct fix attempts — then give the exact error, both attempts, and what you
+think is blocking it.
 
 ### 6.8 Reporting
 
@@ -680,10 +845,9 @@ Run for every new repo so GSD is set up consistently:
 2. **Pick the archetype** — main-only (A) or dev/test/prod (B).
 3. **Apply the common core** config from [§4](#4-the-common-gsd-config-baseline)
    (`model_profile`, `workflow.*`, `commit_docs`, etc.).
-4. **Set the `git` block** for your archetype:
-   - A: `branching_strategy=none`, `base_branch=main`
-   - B: `base_branch=dev`, `branching_strategy=phase` (house standard; `none`
-     only for hand-managed branches — never `milestone`)
+4. **Set the `git` block.** `branching_strategy=milestone` and `create_tag=true`
+   on every repo; the archetype only sets `base_branch` — A: `main`, B: `dev`.
+   Use `phase` only when several people work one milestone at once ([§2.1](#21-branching-strategy--milestone-is-the-house-standard)).
 5. **Apply the worktree HEAD fix as a shared setting**
    ([§3](#3-the-worktree-head-fix-required-on-every-repo)) — put
    `worktree.baseRef: "head"` in the **committed** `.claude/settings.json` so every
@@ -693,12 +857,13 @@ Run for every new repo so GSD is set up consistently:
 6. **Double-check the landmines** in [§5](#5-settings-that-need-special-attention):
    `subagent_timeout` is ms (use `900000`), `context_window` stays `200000`,
    `mode` is `interactive` unless this is a trusted autonomous repo.
-7. **Set up Graphify for GSD graph context** ([§4.1](#41-graphify-setup-required-for-gsd-graph-context)):
+7. **Set up Graphify for GSD graph context** ([§4.1](#41-graphify-setup--required-for-gsd-graph-context)):
    install/verify the Graphify CLI on this machine, commit `.graphifyignore`,
    ignore `graphify-out/` and `.planning/graphs/`, uninstall Graphify git hooks,
    then run `$gsd-graphify build` locally.
-8. **Parallel milestones?** Don't change branching for it — create a **workstream**
-   per milestone (`gsd-tools query workstream.create <name>`) when a second
-   engineer actually starts.
+8. **Parallel milestones?** Create a **workstream** per developer
+   (`gsd-tools query workstream.create <name>`) when a second engineer actually
+   starts. They already get their own milestone branch from step 4 — both are
+   needed.
 9. **Commit `.planning/config.json`** (and shared `.claude/settings.json`) so the
    setup travels with the repo.

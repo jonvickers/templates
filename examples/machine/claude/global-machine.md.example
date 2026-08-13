@@ -1,0 +1,53 @@
+# This machine
+
+Host-specific facts that back the rules in `global-prompt.md`, kept out of the
+public templates repo. The master copy is `~/.claude/global-machine.md` — edit
+there and rerun `sync-global-prompt.ps1`.
+
+> **Placeholders below.** Replace every `<...>` with this machine's real values.
+> This file is always loaded, so keep it to **facts an agent cannot discover on
+> its own**. Anything that is guidance rather than a fact belongs in
+> `global-prompt.md`; anything discoverable (installed versions, running ports)
+> belongs nowhere — the agent should just look.
+
+## Machines on this LAN
+
+| Machine | LAN IP | Role |
+|---|---|---|
+| `<DEV-BOX-NAME>` | `<10.0.0.x>` | where the code and dev servers live |
+| `<DESK-BOX-NAME>` | `<10.0.0.y>` | the box I sit at, RDP'd into the dev box |
+
+Because I RDP from one machine into another, the browser you're connected to is
+frequently **not** on the machine running your shell and dev server — that's step
+2 of the loopback ladder in `global-prompt.md`. Reach a dev server at
+`http://<DEV-BOX-IP>:PORT`.
+
+## Cloud accounts and project ids
+
+- `<work-email>` is a **Workspace** account, so Gemini CLI needs
+  `GOOGLE_CLOUD_PROJECT=<gcp-project-id>` — normally supplied by `~/.gemini/.env`.
+
+Gemini CLI does **not** merge env files; first match wins, walking up from cwd and
+checking `.gemini/.env` then `.env` in each directory. So any repo that commits its
+own root `.env` shadows `~/.gemini/.env`, and `gemini -p` dies with
+`ProjectIdRequiredError` from inside that repo while working fine from `~`. That
+silently drops cross-AI review to Codex only, since review runs from the repo root.
+
+Fix per affected repo: create `.gemini/.env` at the repo root containing only
+`GOOGLE_CLOUD_PROJECT=<gcp-project-id>` — it wins as step 1 in the chain, and the
+app's own dotenv loader reads `.env`, so app GCP calls are unaffected. Gitignore
+just that file, not the whole `.gemini/` directory. Verify from the repo root:
+`gemini -p "Reply with one word: PONG"`.
+
+## Shell
+
+`<OS and version>`. `<primary shell>` is the primary shell; `<secondary shell>` is
+available for the other syntax. Match the syntax to the shell you're invoking —
+don't send PowerShell syntax to a POSIX shell or the reverse.
+
+## Where the repos live
+
+Clones live under `<~/Code>`. The `templates` repo — the source for
+`global-prompt.md`, `gsd-settings.md`, and `ai-setup-audit.md` — is at
+`<~/Code/templates>`; re-run its `sync-global-prompt.ps1` after editing any of
+them.
