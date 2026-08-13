@@ -8,9 +8,10 @@ loads, plus older per-platform templates.
 - `global-prompt.md` — the cross-agent, cross-repo rules. Fanned out to
   `~/.claude`, `~/.gemini` (imported as a side-car) and inlined into
   `~/.codex/AGENTS.md`.
-- `gsd-settings.md` — canonical GSD config, branching, the worktree HEAD fix, and
-  the milestone close ritual (§6). Copied to all three config directories but
-  imported by none: it is read on demand, so it costs no context until needed.
+- `gsd-settings.md` — canonical GSD config, branching, the worktree HEAD fix,
+  cross-AI review lanes (§7), and the milestone close ritual (§6). Copied to all
+  three config directories but imported by none: it is read on demand, so it
+  costs no context until needed.
 
 Run `./sync-global-prompt.ps1` after editing either one. The script preserves any
 CLI-specific text above the generated marker in `~/.codex/AGENTS.md`, so put

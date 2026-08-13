@@ -598,7 +598,8 @@ file. Assert:
 - The worktree HEAD fix is present
   ([§3](#3-the-worktree-head-fix-required-on-every-repo)).
 - `claude_md_path` points at a file that actually exists.
-- Review lanes and model pins are sane — no stale or garbage entries.
+- Review lanes and model pins are sane ([§7](#7-cross-ai-review-lanes)) — no
+  stale or garbage entries.
 - No duplicated or contradicting guidance across `.planning/config.json`, the
   repo's `AGENTS.md`, and the global instruction file. Most specific wins;
   delete the redundant copy rather than keeping both.
@@ -634,6 +635,39 @@ tried.
 
 Five lines max: what merged, what deployed where, what was tested, what was
 fixed, what's left.
+
+---
+
+## 7. Cross-AI review lanes
+
+All four lanes (codex, gemini, claude, opencode/grok) work here. "No output /
+timed out" is a **timeout race, not a crash** — at each CLI's default effort a
+grounded review runs ~9–10 min and blows any ≤600 s bound.
+
+- **Codex:** `codex exec --ephemeral --dangerously-bypass-approvals-and-sandbox
+  --skip-git-repo-check -c model_reasoning_effort="medium" -` with the prompt on
+  stdin. Always pass the effort override — the config default is tuned for my
+  interactive sessions and makes a grounded review take ~10 min.
+- **Claude:** pin `review.models.claude` to a fast mid-tier model (`sonnet` today),
+  or pass `--model sonnet`. Prefer keeping `claude` out of
+  `review.default_reviewers` so a no-flag review doesn't silently run the slow
+  host lane.
+- **Gemini:** dies with `ProjectIdRequiredError` in any repo that commits its own
+  root `.env` — Gemini resolves env files first-match-wins and never merges, so
+  the repo `.env` shadows the home config and the lane silently drops out of every
+  review. Per-repo fix and the project id are in `global-machine.md`.
+- **OpenCode / Grok:** runs through GSD's opencode adapter, so it only
+  participates via `review.reviewer_instances` + `review.default_reviewers` — it
+  is never selected by `--all` or a bare `--opencode` flag. A name in
+  `default_reviewers` that is neither an instance nor a built-in slug is a hard
+  error, not a silent drop.
+- **Time bounds:** give every lane ≥ 900 s and run it in the background. Capture
+  stderr to a `.err` file — never `2>/dev/null`.
+- **Don't declare a lane dead on 0-byte interim output.** `claude -p` buffers
+  stdout and stderr until its final message, so 0 bytes for 8 minutes is normal.
+  Codex streams tool activity to stderr, so silence there IS meaningful.
+- `hook: PostToolUse Failed` in codex stderr is a context-monitor hook hitting
+  its timeout under load — noise, not a review failure.
 
 ---
 

@@ -1,12 +1,13 @@
 # Global Prompt
 
-Cross-agent, cross-repo rules. Every AI CLI I run loads this.
+Cross-agent, cross-repo rules. Every AI CLI I run loads this via
+`sync-global-prompt.ps1` — edit this source in `jonvickers/templates`, not a
+CLI's synced copy.
 
 **This file is public.** Host names, IP addresses, account identifiers, project
 ids, and absolute personal paths belong in the machine-local companion
 (`global-machine.md`, synced alongside this file but never committed) — never
-here. Link this file into a tool's global instruction file rather than copying
-it (Claude: `@global-prompt.md`; Codex/Gemini: symlink, include, or sync).
+here.
 
 ---
 
@@ -114,34 +115,13 @@ adopted the convention; follow its own instructions instead.
 
 ## Cross-AI review lanes
 
-All four lanes (codex, gemini, claude, opencode/grok) work here. "No output /
-timed out" is a **timeout race, not a crash** — at each CLI's default effort a
-grounded review runs ~9 min and blows any ≤600 s bound.
+**Trigger:** invoking, scripting, or debugging a cross-AI review lane (codex /
+gemini / claude / opencode), including one that produced no output.
 
-- **Codex:** `codex exec --ephemeral --dangerously-bypass-approvals-and-sandbox
-  --skip-git-repo-check -c model_reasoning_effort="medium" -` with the prompt on
-  stdin. Always pass the effort override — the config default is tuned for my
-  interactive sessions and makes a grounded review take ~10 min.
-- **Claude:** pin `review.models.claude` to a fast mid-tier model (`sonnet` today),
-  or pass `--model sonnet`. Prefer keeping `claude` out of
-  `review.default_reviewers` so a no-flag review doesn't silently run the slow
-  host lane.
-- **Gemini:** dies with `ProjectIdRequiredError` in any repo that commits its own
-  root `.env` — Gemini resolves env files first-match-wins and never merges, so
-  the repo `.env` shadows the home config and the lane silently drops out of every
-  review. Per-repo fix and the project id are in `global-machine.md`.
-- **OpenCode / Grok:** runs through GSD's opencode adapter, so it only
-  participates via `review.reviewer_instances` + `review.default_reviewers` — it
-  is never selected by `--all` or a bare `--opencode` flag. A name in
-  `default_reviewers` that is neither an instance nor a built-in slug is a hard
-  error, not a silent drop.
-- **Time bounds:** give every lane ≥ 900 s and run it in the background. Capture
-  stderr to a `.err` file — never `2>/dev/null`.
-- **Don't declare a lane dead on 0-byte interim output.** `claude -p` buffers
-  stdout and stderr until its final message, so 0 bytes for 8 minutes is normal.
-  Codex streams tool activity to stderr, so silence there IS meaningful.
-- `hook: PostToolUse Failed` in codex stderr is a context-monitor hook hitting
-  its timeout under load — noise, not a review failure.
+Open `gsd-settings.md` §7 for the exact invocations, effort overrides, per-lane
+failure modes, and time bounds before running a lane or declaring one dead. The
+one rule that can't wait for the file: "no output" is a timeout race, not a
+crash — give every lane ≥ 900 s, in the background.
 
 ---
 
