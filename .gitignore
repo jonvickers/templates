@@ -138,3 +138,6 @@ dump.rdb
 tmp/
 temp/
 *.cache
+
+# Machine-local companion to global-prompt.md — never commit (this repo is public)
+global-machine.md
