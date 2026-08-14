@@ -503,6 +503,11 @@ unless a repo-specific note says otherwise.
     "node_repair_budget": 3,         // bumped from default 2 for self-heal robustness.
     "subagent_timeout": 900000,      // MILLISECONDS. 15 min. See §5 — do NOT write 900.
     "tdd_mode": false,
+
+    // Leave false. Whether phases chain is decided by the COMMAND the engineer
+    // runs, not by config — /gsd-autonomous chains, /gsd-execute-phase does one
+    // phase. Setting this true takes that choice away from whoever starts the
+    // work and applies it to everyone in the repo.
     "auto_advance": false,
     "skip_discuss": false,
     "discuss_mode": "discuss",
@@ -800,11 +805,16 @@ promotion to the next.
    `git tag --list` and match it exactly rather than inventing one; annotated
    (`git tag -a`) naming the milestone is the default. If the repo has never been
    tagged, ask once and record the answer in its `AGENTS.md`.
-5. **Deploy** each environment you promoted into, using the repo's documented
-   command. **Promote all the way to production without asking** where the repo
-   has a staging/test slot and a swap — deploy, test the slot, swap, test prod.
-   See *Deploying to production* in `global-prompt.md` for the reversibility test
-   and the short list of things that still stop.
+5. **Check for a freeze, then deploy.** Look at the repo's memory, `.planning/`
+   notes, and `STATE.md` for an active production freeze *before* deploying —
+   they are temporary, so they are never in `AGENTS.md`. If one is active, stop
+   and report it; the close ends there.
+
+   Otherwise deploy each environment you promoted into, using the repo's
+   documented command, and **promote all the way to production without asking**
+   where the repo has a staging/test slot and a swap: deploy, test the slot,
+   swap, test prod. See *Deploying to production* in `global-prompt.md` for the
+   reversibility test and the short list of things that still stop.
 6. **Watch the deploy to completion.** Firing the command is not deploying.
    Follow the build/release until it reports a terminal state — stream the
    provider's logs, poll the deployment status, or watch the CI run. A deploy

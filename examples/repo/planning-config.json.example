@@ -66,6 +66,11 @@
     "subagent_timeout": 900000,
 
     "tdd_mode": false,
+
+    // Leave false. Whether phases chain is the engineer's call at the moment
+    // they start work, expressed by which command they run — /gsd-autonomous
+    // chains, /gsd-execute-phase does a single phase. Turning this on in config
+    // takes that decision away from them and imposes it repo-wide.
     "auto_advance": false,
     "skip_discuss": false,
     "discuss_mode": "discuss",

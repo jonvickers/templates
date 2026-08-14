@@ -150,8 +150,28 @@ sitting there and a single action restores it.
 
 A repo may narrow this further, and some do — a revenue system without slots, a
 messaging service where the send is the product. Those exceptions live in that
-repo's `AGENTS.md` and say plainly what they cover. Absent such a note, the
-default is: deploy it.
+repo's `AGENTS.md` and say plainly what they cover.
+
+### Check for a freeze before every deploy
+
+**A freeze outranks this permission completely, and you will not find it in
+`AGENTS.md`.** Freezes are temporary — an operator mid-send to real customers, a
+month-end close, an incident in progress — so they live wherever the current
+state lives: memory, `.planning/` notes, `STATE.md`, or something I told you this
+session. `AGENTS.md` describes how the repo works in general; it cannot know
+what is happening today.
+
+So before you deploy or swap, look. If anything says frozen, **stop and say so** —
+do not weigh it against this rule, and do not decide the freeze probably doesn't
+apply to your particular change. Whoever wrote it knew something you don't.
+
+The one that makes this concrete: a payments repo had a live slot-swap pipeline,
+every standing rule said ship it, and an operator was part-way through sending
+real payment requests to real patients. Swapping would have changed the pay
+screen under someone mid-payment. The freeze was recorded in memory that morning
+and nowhere else.
+
+Absent an exception in `AGENTS.md` and absent a freeze, the default is: deploy it.
 
 ## Authorization is what I said, not what you infer
 
