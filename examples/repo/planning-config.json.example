@@ -12,7 +12,13 @@
 // that file is the reasoning. Where they disagree, gsd-settings.md wins.
 {
   "model_profile": "quality",      // Opus everywhere except verification
-  "mode": "interactive",           // "yolo" only for trusted autonomous repos
+
+  // "yolo" runs phases without approval gates. This is our default, not an
+  // escape hatch — every repo on this team runs it, and the safety that
+  // matters lives in the not-reversible stop list in global-prompt.md, not in
+  // a prompt between phases. Use "interactive" only for a repo you genuinely
+  // do not trust yet.
+  "mode": "yolo",
   "granularity": "standard",
   "commit_docs": true,             // planning docs tracked in git
   "parallelization": true,         // pair with workflow.use_worktrees below

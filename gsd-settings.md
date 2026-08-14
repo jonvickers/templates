@@ -317,10 +317,26 @@ Read the topology before dispatching:
 gsd-tools phase-plan-index <phase> --json     # plan count, waves, widths
 ```
 
-Some repos carry a gate script that turns these targets into an exit code; where
-one exists it is named in that repo's `AGENTS.md` and running it is mandatory
-before dispatch. Prose targets alone have a poor track record — they were written
-down for months in the repo above and did not hold.
+**Run the gate, not your judgement.** Prose targets have a poor track record —
+these exact ones sat in that repo's `AGENTS.md` for months while every phase
+shipped one-plan waves. `templates/tools/wave-width-check.js` turns them into an
+exit code:
+
+```bash
+node <templates>/tools/wave-width-check.js .planning/phases/<phase-dir>
+node <templates>/tools/wave-width-check.js --all --json     # sweep every phase
+```
+
+It reports plan count, wave widths, median width, single-plan-wave fraction,
+plans missing `files_modified`, and intra-wave file overlaps, and exits non-zero
+when the phase will not run wide. Phases under 5 plans are exempt from the width
+targets — a 2-plan phase cannot reach median 3 — but are still checked for the
+other two defects. It is repo-agnostic: point it at any `.planning` phase
+directory, workstream layouts included.
+
+Copy it into a repo (`scripts/gsd-checks/`) and name it in that repo's
+`AGENTS.md` if you want it local, or run it from the templates clone. Either way,
+**run it before dispatching a phase.**
 
 **If the topology is bad, replan before executing.** Group work into bounded
 ownership lanes with disjoint file sets. Splitting the roadmap phase is a last
@@ -466,7 +482,7 @@ unless a repo-specific note says otherwise.
 ```jsonc
 {
   "model_profile": "quality",        // Opus everywhere except verification. Our quality-over-cost default.
-  "mode": "interactive",             // "yolo" only for trusted autonomous repos (see note).
+  "mode": "yolo",                    // house default — no approval gates between phases (§5).
   "granularity": "standard",
   "commit_docs": true,               // planning docs tracked in git; reach the default branch on merge.
 
@@ -669,7 +685,7 @@ These are the ones that bite. Read before touching.
 | **`commit_docs` + `/gsd-pr-branch`** | `commit_docs: true` keeps planning in git, and (because it's `true`) GSD does **not** strip `.planning/` at merge. But `/gsd-pr-branch` *deliberately* strips `.planning/` to make a clean review PR. If you merge **only** that stripped branch, planning never reaches the default branch. Always merge the real branch (squash/full) to land planning; use pr-branch only as a review artifact. |
 | **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). With `branching_strategy: "milestone"` (or `"phase"`) the mismatch is otherwise *guaranteed* — a milestone branch is never `origin/HEAD`. **Resolution is a 3-layer cascade, first non-null wins:** repo `.claude/settings.local.json` → repo `.claude/settings.json` → user `~/.claude/settings.json`. Note what is *absent*: `~/.claude/settings.local.json` is never read. Layers 1 and 3 both work on your machine, which is exactly the trap — the repo looks configured to you and silently degrades on a teammate's fresh clone. Put it in layer 2, the committed repo file, so it travels. |
 | **`workflow.use_worktrees` on Windows** | Windows has known worktree/merge friction (merge-rollback, base mismatch). The §3 HEAD fix resolves the common mismatch. If worktree merges still misbehave, set `use_worktrees: false` (sequential) as the escape hatch. |
-| **`mode: "yolo"`** | Runs phases autonomously with no approval gates. Fine for a trusted single-owner repo (alpine-manager uses it). New/shared repos should usually start `"interactive"`. |
+| **`mode: "yolo"`** | Runs phases with no approval gates. **This is our default**, on shared multi-engineer repos included — the approval prompt was never the thing keeping us safe. What keeps us safe is the not-reversible stop list in `global-prompt.md`, which applies regardless of mode. Use `"interactive"` only for a repo whose deploy path you have not verified yet, and treat that as temporary. |
 | **`git.branching_strategy: "milestone"`** | Our standard (§2.1), and it carries one real cost: the branch is long-lived, so `dev` drifts underneath it. Pull from the base branch regularly while the milestone is open, and keep one developer per open milestone. Two people on one milestone → use `phase` for that repo. |
 | **`git.milestone_branch_template`** | Changing it mid-project orphans the branch GSD was already using — the next execute-phase creates a *second* branch for the same milestone under the new name and the earlier work sits on the old one. Change it only between milestones. |
 | **Graphify caches** | Keep `graphify-out/` and `.planning/graphs/` local/ignored. Commit `.graphifyignore`, not generated graph JSON. Install the Graphify CLI per computer; refresh with `$gsd-graphify build`; do not rely on repo hooks. |
