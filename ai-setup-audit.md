@@ -83,7 +83,58 @@ apply the [fix policy](#fix-policy), and end with the
 
 ## 0. Inventory
 
-Establish what is actually installed before judging anything.
+### 0.1 Resolve the two paths everything else depends on
+
+**Do this first and do not skip it.** Every sweep below is written against
+`~/Code/` and `~/Code/templates` because that is where most of us keep things.
+On a machine that uses `~/dev`, `~/src`, or `~/Projects`, those globs match
+nothing, every repo check silently passes, and the audit reports clean while
+auditing zero repos. That is the worst failure this document can have.
+
+```bash
+# Where the repos live. Take the first hit, or ask.
+for d in ~/Code ~/code ~/dev ~/src ~/Projects ~/repos ~/git; do
+  [ -d "$d" ] && { n=$(find "$d" -maxdepth 2 -name .git -type d 2>/dev/null | wc -l); \
+    echo "  $d  ($n git repos)"; }
+done
+```
+
+Set `CODE_ROOT` to whichever holds the repos and `REPO` to the `templates`
+clone, then **substitute them into every `~/Code` path below**. If neither is
+obvious, ask the engineer one plain question: *where do you keep your code, and
+where did you clone the templates repo?*
+
+```bash
+CODE_ROOT=~/Code                 # adjust
+REPO="$CODE_ROOT/templates"      # adjust
+[ -d "$REPO/.git" ] || echo "NOT A CLONE: $REPO — §1.2 and §9.6 cannot run"
+```
+
+If the templates clone genuinely isn't on this machine, say so plainly and skip
+§1.2 and §9.6 rather than guessing — a comparison against a missing baseline is
+worse than no comparison.
+
+### 0.2 Is the standard itself current?
+
+The audit compares this machine against the `templates` clone. **A stale clone
+means you audit against a stale standard and pass.** Check the clone before
+trusting anything it says:
+
+```bash
+git -C "$REPO" fetch -q origin 2>/dev/null
+behind=$(git -C "$REPO" rev-list --count HEAD..@{u} 2>/dev/null || echo '?')
+dirty=$(git -C "$REPO" status --porcelain | wc -l)
+echo "templates clone: $behind commits behind origin, $dirty uncommitted"
+```
+
+`behind > 0` is a **finding, and it blocks the rest of the audit** — pull first,
+re-run the sync, then continue. Otherwise every drift check in §1.2 measures
+against a baseline that is itself out of date. `dirty > 0` means someone is
+mid-edit; find out whether those edits are meant to ship before syncing them out.
+
+### 0.3 What is installed
+
+Establish what is actually present before judging anything.
 
 ```bash
 for d in ~/.claude ~/.codex ~/.gemini; do
