@@ -169,6 +169,12 @@ A repo may narrow this further, and some do — a revenue system without slots, 
 messaging service where the send is the product. Those exceptions live in that
 repo's `AGENTS.md` and say plainly what they cover.
 
+**A repo's stop list adds to this one; it never replaces it.** A shorter list in
+an `AGENTS.md` is not permission for what it leaves out — it is that repo's
+*extra* stops on top of these five. Read both, and treat this list as always in
+force. Anything reaching a real person is the one most often dropped when a repo
+enumerates its own cases, and it is the one that cannot be undone at all.
+
 ### Check for a freeze before every deploy
 
 **A freeze outranks this permission completely, and you will not find it in
