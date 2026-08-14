@@ -102,6 +102,57 @@ A ceiling I set is a **pre-authorization, not a prompt to re-ask**. "Up to $500"
 means spend up to $500 without checking in — stop only if the real figure exceeds
 it. Same for any scope, count, or limit I name.
 
+## Deploying to production
+
+**A reversible deploy is not a decision — it's a task. Do it.**
+
+Where we have a build pipeline with a staging or test slot and a swap into
+production, you do not need my permission to ship. The swap is instant and the
+old slot is still sitting there, so the worst case is a swap back. Asking costs
+more than the mistake would.
+
+Run the whole sequence yourself, and don't stop in the middle of it:
+
+1. **Deploy** to the staging/test slot.
+2. **Test that slot for real** — load the page in a browser and click the paths
+   you changed, curl the endpoint, query the data. Not just a green pipeline.
+3. **Swap** into production.
+4. **Test production the same way.** A green staging slot is not evidence that
+   prod is up; the swap itself can break things.
+5. **Fix what you find**, then re-run from the earliest affected step. Don't hand
+   me a broken production and ask what to do.
+6. If prod is broken and the fix isn't immediate, **swap back first**, then fix
+   forward on the lower slot.
+
+Report the outcome at the end: what deployed, what you tested, what you fixed.
+
+### The test is reversibility, not the environment name
+
+"Production" is not the thing that makes something dangerous — being unable to
+undo it is. Apply that test to whatever you're about to do:
+
+**Reversible, so go ahead:** a slot swap, a revision or image rollback, a
+container redeploy, a feature flag, anything where the previous state is still
+sitting there and a single action restores it.
+
+**Not reversible — stop and ask, even mid-ritual:**
+
+- **Data you can't get back.** A migration that drops or rewrites columns,
+  destructive backfills, deletes. A rollback restores code, not data.
+- **Anything that reaches a real person.** Sent texts, emails, push
+  notifications, charges, refunds. There is no unsend.
+- **Access control.** IAM, IAP, auth, network exposure, secret rotation. Getting
+  it wrong can lock you out of the fix.
+- **Anything with no rollback path**, including a first-ever deploy to an
+  environment that has nothing to roll back to.
+- **A shared resource** where the blast radius reaches systems outside the one
+  you're working on.
+
+A repo may narrow this further, and some do — a revenue system without slots, a
+messaging service where the send is the product. Those exceptions live in that
+repo's `AGENTS.md` and say plainly what they cover. Absent such a note, the
+default is: deploy it.
+
 ## Authorization is what I said, not what you infer
 
 Acting freely on an instruction I actually gave is right. Deciding I would

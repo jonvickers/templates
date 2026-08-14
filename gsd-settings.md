@@ -785,7 +785,10 @@ promotion to the next.
    (`git tag -a`) naming the milestone is the default. If the repo has never been
    tagged, ask once and record the answer in its `AGENTS.md`.
 5. **Deploy** each environment you promoted into, using the repo's documented
-   command.
+   command. **Promote all the way to production without asking** where the repo
+   has a staging/test slot and a swap — deploy, test the slot, swap, test prod.
+   See *Deploying to production* in `global-prompt.md` for the reversibility test
+   and the short list of things that still stop.
 6. **Watch the deploy to completion.** Firing the command is not deploying.
    Follow the build/release until it reports a terminal state — stream the
    provider's logs, poll the deployment status, or watch the CI run. A deploy
