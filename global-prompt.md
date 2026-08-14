@@ -43,6 +43,8 @@ it shorter; I'll ask for more.
   asides, or recaps of work I watched you do.
 - **Never re-explain something you already told me this session.** Corrections,
   caveats, and root causes get stated once.
+- **Never re-ask a settled question.** If I have answered it, or an artifact
+  records the answer, it is settled. Re-asking is a defect, not diligence.
 - Long autonomous runs: report at the END of a block, not per agent completion.
   One line per agent, not a paragraph.
 

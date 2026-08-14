@@ -884,6 +884,78 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
 
 ---
 
+## 8. Autonomous execution — decide and keep going
+
+**The default is to continue.** Do not stop to ask when you can decide, record,
+and proceed. This governs how a phase runs; `global-prompt.md` governs what is
+never autonomous regardless.
+
+### 8.1 Approved scope is standing authorization
+
+Authorization is granted **once** — when a milestone's requirements and roadmap
+are approved and a phase's CONTEXT decisions are settled — not again per
+operation. If an operation is described in `REQUIREMENTS.md`, `ROADMAP.md`, or an
+approved phase `CONTEXT.md`, it is authorized. That includes live changes to
+shared infrastructure and to production **when the phase exists to make exactly
+that change**.
+
+This supersedes any general "obtain explicit authorization" line in a repo's
+`AGENTS.md` for work already inside an approved phase. It does **not** supersede
+the not-reversible list or an active freeze — those hold regardless of scope.
+
+### 8.2 Don't plan blocking checkpoints for in-scope work
+
+A `checkpoint:decision` is for a choice that is genuinely the user's *and*
+genuinely unresolvable from the approved artifacts. It is not for re-confirming
+something already approved, and not for a risk the plan already mitigates.
+
+**Prefer a machine-checked gate over a human prompt** — measured load, capacity
+headroom, no conflicting job running, a verified rollback recorded. A gate that
+can fail protects production; a prompt only delays it.
+
+### 8.3 When a choice appears mid-run, take it and record it
+
+Take the recommended option and write the decision into the phase artifacts: the
+rationale, what was rejected and why, and what would have to be true to revisit
+it. Auditable after the fact beats blocking during. Then continue.
+
+### 8.4 Stop only for these
+
+Anything else is a decision to make, not a question to ask:
+
+1. **Anything on the not-reversible list** in `global-prompt.md`, or an active
+   production freeze. Read it there; it is not repeated here.
+2. **Work genuinely outside the approved milestone scope**, where proceeding
+   would mean inventing scope the user never agreed to.
+3. **A concrete active incident**, where continuing would make a live
+   customer-facing problem worse.
+4. **Spend materially above the phase's recorded estimate** (the standing
+   pre-authorization in `global-prompt.md` still applies below that).
+
+### 8.5 Wall clocks must never block a phase
+
+A phase must not stall waiting on the calendar.
+
+- **One hour is the limit.** A wait up to an hour inside a plan is fine — hold it
+  inline. Anything longer must not be planned as a wait at all.
+- **Plan around the wait, don't sit in it.** If work genuinely needs elapsed time
+  — traffic to accumulate, a soak window, a propagation delay, an off-hours
+  window — split it. Do everything not depending on the elapsed time now, and
+  file the remainder as a todo under `.planning/todos/pending/` recording what
+  must be true before it runs and the exact command to resume it. Then let the
+  phase continue to its next plan.
+- **Never gate a later phase on an earlier phase's wall clock.** If Phase N+1
+  doesn't consume the delayed measurement, it starts immediately. Only the plan
+  that reads the result waits.
+- **Verification treats a filed, time-blocked todo as advanced, not stalled.**
+  Record it as deferred with its resume command rather than leaving the phase
+  open and idle.
+- **Off-hours windows are a planning preference, not a constraint,** unless the
+  user set them. Say which it is, and prefer a machine-checked safety gate over a
+  clock reading — the gate is what actually protects production.
+
+---
+
 ## New-Repo Checklist
 
 Run for every new repo so GSD is set up consistently:
