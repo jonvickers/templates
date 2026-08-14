@@ -44,7 +44,8 @@ do **not** inherit those rules automatically. Restate them in the spawn prompt.
 If a task needs a browser — clicking through a cloud console, an OAuth consent
 screen, a vendor portal, a settings page — **use the claude-in-chrome tools and do
 it**. Do not hand me a link and a numbered list of clicks. That is the same rule as
-"Test it yourself first" in `global-prompt.md`, applied to the browser: asking me
+"Never hand me work you can do yourself" in `global-prompt.md`, applied to the
+browser: asking me
 to click is the exception, and it needs a real reason (a credential only I hold,
 an MFA prompt on my phone, a decision that is genuinely mine).
 

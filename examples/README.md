@@ -105,7 +105,7 @@ is the one place where being concise is worth real money and real latency.
 
 | File | Target | Notes |
 |---|---|---|
-| `global-prompt.md` | ~12 KB | ×3 CLIs, every session — the most expensive file here |
+| `global-prompt.md` | ~16 KB | ×3 CLIs, every session — the most expensive file here |
 | `global-machine.md` | ≤ 2 KB | facts only, no guidance |
 | `~/.claude/CLAUDE.md` | ≤ 4 KB | Claude-only deltas |
 | `~/.codex/AGENTS.md` preamble | ≤ 4 KB | Codex-only deltas; the rest is generated |
@@ -118,11 +118,19 @@ have looked* — and the finding you report is the specific misplaced content, n
 the byte count.
 
 Raising a number without doing that check is how a budget dies. When you do raise
-one, say what you checked and why the content earned its place. `global-prompt.md`
-was set at 10 KB by guess and now sits just over 12 KB after gaining spend
-authorization, the hardened plain-English rule, and the authorization-vs-inference
-section — all load-bearing, none of it misplaced, so the number moved rather than
-the file.
+one, say what you checked and why the content earned its place.
+
+`global-prompt.md` was set at 10 KB by guess and is now ~16 KB. Each raise was
+checked: every section is a standing behavioural rule that applies to every repo
+and every CLI, so nothing is misplaced by the placement test, and the two most
+verbose sections were tightened rather than the number simply moved again.
+
+**Before adding a section here, ask whether it is a rule or a procedure.** A rule
+governs behaviour continuously and has to be always-loaded. A procedure is only
+needed when a specific trigger fires — closing a milestone, auditing a machine,
+debugging a review lane — and belongs in a read-on-demand file behind a
+three-line pointer. That distinction, not a byte count, is what keeps this file
+from becoming a manual.
 
 ---
 

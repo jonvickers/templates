@@ -62,25 +62,50 @@ Stop-Process`, `pkill codex` — destroys those sibling sessions and loses my wo
 - Same rule for servers: if one is already running, attach to it. If you started
   it, leave it up until you're done testing, then stop only that one.
 
-## Test it yourself first
+## Never hand me work you can do yourself
 
-**You run the UAT.** Asking me to verify is the exception and needs an
-overwhelming reason: visual judgment no automation can substitute, physical
-hardware, or credentials you truly cannot acquire from the environment. Anything
-short of that, test it yourself.
+**If you have the capability, use it.** Asking me to do something you could do
+turns one tool call into a round trip through a human, and I am slower than you
+at all of it.
+
+The worst offender: **asking me to run a command.** You have a shell — run it.
+"Can you run `npm test` and paste the output?" is never the right message, and
+neither is asking me to read a file, look up a value, check a log, query a
+database, hit an endpoint, or click through a UI you can drive. Before asking me
+anything: *do I have a tool for this?* If yes, use it rather than describing it.
+
+**Try before declaring you can't.** An assumed limitation is not grounds to
+escalate — attempt it and report what happened. Credentials in the environment
+are real capability; check them live. A permission error you hit is a finding;
+one you predicted is not.
+
+**Only these genuinely need me:** a credential only I hold (after you've checked
+the environment); an MFA prompt or hardware key; access you actually attempted
+and were refused; a decision that is mine — scope, cost above the ceiling,
+priorities, anything on the not-reversible list.
+
+That is the whole list. Convenience is not on it, and neither is "this felt like
+your call" for something already authorized.
+
+**When you do need me, make it one step:** what you tried, the exact error, and
+the single thing you need. Not a tutorial for work you could have finished.
+
+### Test it yourself — the case this comes up most
+
+**You run the UAT.** Verification is the task agents hand back most often, and
+almost never legitimately.
 
 - Check for an already-running dev server before starting one, and start one if
   nothing is listening on the expected port.
 - Exercise the change end to end — curl the endpoint, drive the browser, query
   the database, diff against a baseline. Whatever the assertion actually demands.
-- Check credentials live before claiming you lack them (`gcloud auth list`, `az
-  account show`, `aws sts get-caller-identity`). Tokens already in the shell
-  environment are real capability.
+- A green pipeline is not a test. Look at the thing you changed.
 - Subagents are narrower than you: a subagent's "needs human" is a fact about its
   sandbox, not a verdict on yours. Re-check from the orchestrator session before
-  relaying it to me.
-- Escalating means naming what you tried and exactly what blocked it. "Needs
-  human verification" with no detail means the check was never attempted.
+  relaying it to me — that is the rule above applied to your own agents.
+
+The only verification I should be doing myself is visual judgment no automation
+can substitute.
 
 ## Spend authorization
 
@@ -106,47 +131,37 @@ it. Same for any scope, count, or limit I name.
 
 **A reversible deploy is not a decision — it's a task. Do it.**
 
-Where we have a build pipeline with a staging or test slot and a swap into
-production, you do not need my permission to ship. The swap is instant and the
-old slot is still sitting there, so the worst case is a swap back. Asking costs
-more than the mistake would.
+Where a repo has a staging or test slot and a swap into production, you do not
+need my permission to ship. The swap is instant and the old slot is still sitting
+there, so the worst case is a swap back. Asking costs more than the mistake.
 
-Run the whole sequence yourself, and don't stop in the middle of it:
-
-1. **Deploy** to the staging/test slot.
-2. **Test that slot for real** — load the page in a browser and click the paths
-   you changed, curl the endpoint, query the data. Not just a green pipeline.
-3. **Swap** into production.
-4. **Test production the same way.** A green staging slot is not evidence that
-   prod is up; the swap itself can break things.
-5. **Fix what you find**, then re-run from the earliest affected step. Don't hand
-   me a broken production and ask what to do.
-6. If prod is broken and the fix isn't immediate, **swap back first**, then fix
-   forward on the lower slot.
-
-Report the outcome at the end: what deployed, what you tested, what you fixed.
+Run the whole sequence, and don't stop in the middle: deploy to the slot → **test
+that slot for real** (load the page, click the paths you changed, curl it, query
+the data — not just a green pipeline) → swap → **test production the same way**,
+because the swap itself can break things → fix what you find and re-run from the
+earliest affected step. If prod is broken and the fix isn't immediate, swap back
+first, then fix forward on the lower slot. Report at the end: what deployed, what
+you tested, what you fixed.
 
 ### The test is reversibility, not the environment name
 
-"Production" is not the thing that makes something dangerous — being unable to
-undo it is. Apply that test to whatever you're about to do:
+"Production" isn't what makes something dangerous — being unable to undo it is.
 
-**Reversible, so go ahead:** a slot swap, a revision or image rollback, a
-container redeploy, a feature flag, anything where the previous state is still
-sitting there and a single action restores it.
+**Reversible, so go:** a slot swap, a revision or image rollback, a container
+redeploy, a feature flag. Anything where the previous state is still sitting
+there and one action restores it.
 
 **Not reversible — stop and ask, even mid-ritual:**
 
-- **Data you can't get back.** A migration that drops or rewrites columns,
-  destructive backfills, deletes. A rollback restores code, not data.
-- **Anything that reaches a real person.** Sent texts, emails, push
-  notifications, charges, refunds. There is no unsend.
-- **Access control.** IAM, IAP, auth, network exposure, secret rotation. Getting
+- **Data you can't get back** — dropped or rewritten columns, destructive
+  backfills, deletes. A rollback restores code, not data.
+- **Anything reaching a real person** — texts, email, push, charges, refunds.
+  There is no unsend.
+- **Access control** — IAM, IAP, auth, network exposure, secret rotation. Getting
   it wrong can lock you out of the fix.
-- **Anything with no rollback path**, including a first-ever deploy to an
-  environment that has nothing to roll back to.
-- **A shared resource** where the blast radius reaches systems outside the one
-  you're working on.
+- **No rollback path**, including a first deploy to an environment with nothing
+  to roll back to.
+- **Shared resources** whose blast radius reaches beyond the system you're in.
 
 A repo may narrow this further, and some do — a revenue system without slots, a
 messaging service where the send is the product. Those exceptions live in that
