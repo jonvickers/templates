@@ -212,3 +212,11 @@ Before branch or worktree deletion, `reset --hard`, force-push, or overwriting a
 file: inspect the target first, and ask whenever safety isn't provable from the
 command output. Never `rm -rf` a worktree directory — `git worktree remove` is the
 only correct way.
+
+**Junctions and symlinks reach through a delete.** Agent worktrees don't get
+gitignored directories like `node_modules`, and a Windows junction into the main
+checkout is the usual fix — but `git worktree remove --force` follows that
+junction and empties the *target*. It has already emptied a main checkout's
+`node_modules` and `vendor` once. **Delete the junction before removing the
+worktree**, and before any recursive delete, check whether the tree contains a
+link pointing somewhere you care about.

@@ -17,7 +17,7 @@
 > of §9 is meaningless without it, and a finding you cannot trace to either an
 > example file or an explicit rule in this document is an opinion, not a finding.
 >
-> **How to run it.** From any CLI, in any directory:
+> **How to run it.** From any CLI, in any directory, paste one line:
 >
 > ```
 > Read ~/.claude/ai-setup-audit.md and execute it.
@@ -25,6 +25,29 @@
 >
 > (`~/.codex/` and `~/.gemini/` carry the same copy — `sync-global-prompt.ps1`
 > fans all three out from `jonvickers/templates`.)
+>
+> **This is the single entry point.** It is the only thing an engineer has to
+> remember. It orchestrates everything else, including handing each repo off to
+> `gsd-settings.md`'s own work order.
+
+---
+
+## Run modes
+
+Add a mode to the line above. Default is `full`.
+
+| Mode | Say | Covers | Roughly |
+|---|---|---|---|
+| **quick** | "…execute it in quick mode" | §0, §3, §5, §11 — install integrity, parallel readiness, git hygiene. Report only, no fixes. | weekly, few minutes |
+| **full** | "…execute it" | §0–§11. Tier 1 fixes applied, Tier 2 proposed. | monthly, or after any CLI/GSD upgrade |
+| **deep** | "…execute it in deep mode" | Everything, plus reading every always-loaded file end to end for duplication (§9.2) and every memory index for staleness (§10.3). | quarterly, or when something feels wrong |
+
+**Run `full` after** a GSD update, a CLI upgrade, onboarding a machine, or
+anything that rewrote a config file. **Run `quick` on a cadence** — its whole job
+is catching the silent degradations: a parallel run that quietly went sequential,
+a hook that stopped firing, a worktree left behind by a crashed executor.
+
+A clean `quick` run is five lines. If it is longer than that, something is wrong.
 
 ---
 
@@ -1045,6 +1068,79 @@ how good the rewritten body is.
 **Fix policy for this section:** rewriting or retiring a memory is **Tier 2** —
 propose with the current text and the correction, then ask. Re-indexing an
 unindexed file and fixing a dangling link are Tier 1.
+
+---
+
+## 11. Repository hygiene
+
+Everything above audits configuration. This audits the **working state** of every
+repo — the debris that accumulates from crashed executors, abandoned branches,
+and work that never got pushed. `gsd-settings.md` §6.1–§6.3 cleans this at
+milestone close; between milestones nothing does, so it piles up.
+
+```bash
+for r in ~/Code/*/; do
+  [ -d "$r/.git" ] || continue
+  ( cd "$r" || exit
+    git fetch -q --prune 2>/dev/null
+    br=$(git rev-parse --abbrev-ref HEAD)
+    dirty=$(git status --porcelain | wc -l)
+    wt=$(( $(git worktree list | wc -l) - 1 ))
+    ahead=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo "-")
+    behind=$(git rev-list --count HEAD..@{u} 2>/dev/null || echo "-")
+    gone=$(git branch -vv | grep -c ': gone]' || true)
+    merged=$(git branch --merged 2>/dev/null | grep -vE "^\*|$br" | wc -l)
+    printf '%-24s %-22s dirty=%-4s worktrees=%-3s ahead=%-4s behind=%-4s gone=%-3s merged=%s\n' \
+      "$(basename "$r")" "$br" "$dirty" "$wt" "$ahead" "$behind" "$gone" "$merged"
+  )
+done
+```
+
+Read the columns like this:
+
+| Column | What a non-zero value means | Action |
+|---|---|---|
+| `dirty` | uncommitted changes | Classify each: real work, or generated noise that should be gitignored. Never assume it's abandoned. |
+| `worktrees` | extra worktrees beyond the main checkout | More than the number of *active* parallel runs means a crashed executor left one. See below. |
+| `ahead` | commits that exist only on this machine | The riskiest column — this work is one disk failure from gone. Find out why it never pushed. |
+| `behind` | the remote has moved | Someone else is working here. Rebase before doing anything, per that repo's own rule. |
+| `gone` | local branches whose upstream was deleted | Their PR merged and the remote branch was removed. Safe to delete **after** confirming they're merged. |
+| `merged` | local branches fully merged into the current one | Delete candidates. |
+| `-` in ahead/behind | no upstream configured | Either a local-only repo or a branch that was never pushed. Check which. |
+
+**Orphan worktrees are the one that actually costs you.** A crashed or
+interrupted executor leaves a worktree holding unmerged commits, and
+`.planning/STATE.md` will not mention it — the phase looks incomplete while the
+work is sitting on an `agent-*` branch nobody is looking at.
+
+```bash
+for r in ~/Code/*/; do
+  [ -d "$r/.git" ] || continue
+  ( cd "$r" || exit
+    git worktree list | tail -n +2 | while read -r path sha branch; do
+      base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|origin/||')
+      n=$(git rev-list --count "${base:-main}..$sha" 2>/dev/null || echo '?')
+      [ -d "$path" ] || { echo "  DIR MISSING  $(basename "$r")  $branch"; continue; }
+      echo "  $(basename "$r")  $branch  $n commits ahead of ${base:-main}  $path"
+    done )
+done
+echo "(no output = no extra worktrees anywhere)"
+```
+
+Any worktree with commits ahead is **unmerged work**. Recover it before removing
+anything: inspect the commits, merge or cherry-pick what's wanted, then
+`git worktree remove`. Never `rm -rf` a worktree directory, and delete any
+junction inside it first — `git worktree remove --force` follows junctions and
+will empty the target, which has already wiped a main checkout's `node_modules`.
+
+An entry in `.git/worktrees/` with no directory on disk is stale metadata:
+`git worktree prune --dry-run` first, then prune.
+
+**Fix policy for this section.** Reporting is always safe. Deleting a merged or
+`gone` branch is **Tier 2** — show the branch and its last commit and ask.
+Anything with unpushed commits, any worktree holding work, and any dirty tree is
+**Tier 3**: report it and stop. The point of this section is to *surface* debris,
+not to clear it unattended.
 
 ---
 
