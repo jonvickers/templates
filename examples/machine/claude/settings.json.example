@@ -78,8 +78,18 @@
 //
 //   "worktree": { "baseRef": "head" }
 //
-// GSD reads worktree.baseRef from the REPO's .claude/settings.json. A copy at
-// the user level looks applied, changes nothing, and hides the fact that a repo
-// is missing the fix — every parallel run in that repo silently degrades to
-// sequential. Put it in each repo's committed settings.json instead, and verify
+// It would WORK here — that is exactly the problem. GSD resolves
+// worktree.baseRef first-non-null-wins across three layers:
+//
+//   1. <repo>/.claude/settings.local.json   gitignored — you only
+//   2. <repo>/.claude/settings.json         committed  — everyone  <-- put it here
+//   3. ~/.claude/settings.json              this machine — you only
+//
+// (~/.claude/settings.local.json is NOT a layer and is never read. A value there
+// really is inert.)
+//
+// Setting it here satisfies layer 3, so every repo on THIS machine passes
+// `gsd-tools worktree base-check` while a teammate's fresh clone silently drops
+// to sequential execution — and it masks repos that are missing the fix, so the
+// audit finds nothing. Put it in each repo's committed settings.json and verify
 // with `gsd-tools worktree base-check` from inside the repo.

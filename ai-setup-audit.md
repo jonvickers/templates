@@ -326,11 +326,21 @@ per machine. Two specific traps:
 
 - **Shared-worthy values stranded in the local file.** If a value would be
   identical for every engineer, promote it to the shared file.
-- **`worktree.baseRef` at the user level is inert.** GSD's `base-check` reads it
-  from the **repo's** `.claude/settings.json`. A copy in `~/.claude/settings.json`
-  or `settings.local.json` looks right, changes nothing, and hides the fact that
-  a repo is missing the fix. If you find one, report it as misleading and check
-  §5 for every repo rather than trusting it.
+- **`worktree.baseRef` — know the cascade before calling anything inert.** GSD
+  resolves it first-non-null-wins across three layers:
+
+  | | Layer | Travels to other clones? |
+  |---|---|---|
+  | 1 | repo `.claude/settings.local.json` | no — gitignored |
+  | 2 | repo `.claude/settings.json` | **yes — put it here** |
+  | 3 | user `~/.claude/settings.json` | no — this machine only |
+
+  `~/.claude/settings.local.json` is **not** a layer and is never read; a value
+  there is genuinely inert. A value in layers 1 or 3 is *not* inert — it works
+  perfectly, for you, which is the actual trap: the repo passes `base-check` on
+  your machine and silently degrades to sequential on a teammate's fresh clone.
+  Report a layer-1 or layer-3 value as **non-portable**, not as broken, and
+  confirm layer 2 is present per repo (§5).
 
 Finally, sweep for stale backups an earlier edit left behind:
 
@@ -905,6 +915,136 @@ Where the machine and the example disagree, **the example is not automatically
 right.** It is a reference copy that can itself go stale. If the machine's
 version is better, the finding is "update the example," and that belongs in the
 report as a Tier 2 proposal against the `templates` repo.
+
+---
+
+## 10. Memory stores
+
+Instruction files are edited deliberately. **Memory accumulates automatically and
+nothing prunes it**, so it rots faster than anything else here and it rots
+silently — a stale memory does not throw an error, it just quietly outranks the
+truth. Treat this section as mandatory, not optional.
+
+Two stores exist on a typical machine:
+
+| Store | Path | Loaded |
+|---|---|---|
+| Claude auto-memory | `~/.claude/projects/<slug>/memory/` | `MEMORY.md` **every session in that project**; individual files on recall |
+| Codex memory | `~/.codex/memories/` | `memory_summary.md` is the distilled layer; `MEMORY.md`, `raw_memories.md`, and `rollout_summaries/` are searched, not loaded |
+
+### 10.1 Index integrity
+
+`MEMORY.md` is a one-line-per-memory index. A file it doesn't list is invisible
+to recall; a line pointing at a missing file is a dead link.
+
+```bash
+node - "$HOME/.claude/projects" <<'EOF'
+const fs=require('fs'),path=require('path');
+const root=process.argv[2];
+let tOrph=0,tMiss=0,tTotal=0;
+for(const p of fs.readdirSync(root)){
+  const dir=path.join(root,p,'memory');
+  if(!fs.existsSync(path.join(dir,'MEMORY.md'))) continue;
+  const idx=fs.readFileSync(path.join(dir,'MEMORY.md'),'utf8');
+  const linked=new Set([...idx.matchAll(/\(([^)]+\.md)\)/g)].map(m=>m[1]));
+  const files=fs.readdirSync(dir).filter(f=>f.endsWith('.md')&&f!=='MEMORY.md');
+  const orphans=files.filter(f=>!linked.has(f));
+  const missing=[...linked].filter(f=>!files.includes(f));
+  tTotal+=files.length; tOrph+=orphans.length; tMiss+=missing.length;
+  if(orphans.length||missing.length)
+    console.log(`${p.padEnd(40)} files=${files.length} unindexed=${orphans.length} dangling=${missing.length}`);
+}
+console.log(`\nTOTAL ${tTotal}  unindexed ${tOrph}  dangling ${tMiss}`);
+EOF
+```
+
+Unindexed files are dead weight — they cost disk, not context. Read each before
+proposing deletion: an unindexed memory is usually one that *should* have been
+indexed, not one that should be deleted.
+
+### 10.2 Always-loaded cost
+
+`MEMORY.md` is loaded on every session in its project, exactly like `AGENTS.md`.
+Measure them together, because trimming one while the other is triple the size
+achieves nothing:
+
+```bash
+for d in ~/.claude/projects/*/memory; do
+  p=${d%/memory}; p=${p##*/}
+  printf '  %-42s MEMORY.md %6s b  (%s memories)\n' "$p" \
+    "$(wc -c < "$d/MEMORY.md")" "$(($(ls "$d"/*.md | wc -l) - 1))"
+done
+```
+
+There is no fixed budget — a mature project legitimately accumulates memories.
+The signal is **an index larger than the repo's `AGENTS.md`**: at that point more
+of the always-loaded context is coming from automatic capture than from anything
+anyone wrote deliberately, and it is worth a pass.
+
+### 10.3 Staleness — the checks that matter
+
+Grep finds candidates; only reading confirms them. Four patterns, worst first:
+
+**A confidently-worded memory that is now false.** The most damaging kind,
+because emphasis raises its recall priority. Hunt for standing rules that
+contradict current config:
+
+```bash
+grep -rl -iE '⚠|STANDING RULE|ALWAYS|NEVER' ~/.claude/projects/*/memory/*.md 2>/dev/null \
+  | grep -v MEMORY.md | head -20
+```
+
+For each, check the claim against live state. A memory asserting a config value
+is the highest-risk shape — read the actual `.planning/config.json` and compare.
+
+**Memories describing something since fixed.**
+
+```bash
+grep -rl -iE 'FIXED in|now fixed|resolved in|no longer|superseded' \
+  ~/.claude/projects/*/memory/*.md 2>/dev/null | grep -v MEMORY.md | head -20
+```
+
+Resolved bugs are history, not instruction. Keep one only if the *diagnosis
+technique* is reusable; otherwise retire it.
+
+**Memories that summarise a read-on-demand file.** A memory restating
+`gsd-settings.md` or an `AGENTS.md` is a snapshot that cannot be updated when the
+source changes. Replace the summary with a pointer, and keep only what the source
+genuinely lacks.
+
+**Memories that outlived their subject.** A memory naming a file, flag, branch, or
+service that no longer exists. Verify before recommending anything it describes.
+
+### 10.4 When memory and the standard disagree, check both
+
+**The memory may be right.** It records what actually happened; a written standard
+records what someone believed should happen. On this machine a memory about a
+milestone-version collision proved the version-numbering procedure incomplete —
+the procedure checked remote branches, and the collision came from an *unpushed
+worktree* it could not see. Another memory correctly described a settings cascade
+that the standard had oversimplified.
+
+So on a conflict: verify against the live system — source, config, or command
+output — and fix whichever is wrong. Do not assume the document wins. When the
+memory turns out to be right, **promote its content into the standard** and cut
+the memory down to a pointer; that is the only way the fact reaches other
+engineers.
+
+### 10.5 Rewriting rather than deleting
+
+Deletion loses the reason something was learned. Prefer rewriting: keep the
+durable fact, mark the retired part explicitly, and say what replaced it. A
+memory reading *"the old rule was X; it is retired, the standard is now Y, see
+<file>"* actively prevents the next agent from reinstating X — a deleted memory
+does not.
+
+Update the `MEMORY.md` line whenever you rewrite a memory. The one-line hook is
+what recall matches on, so a stale hook keeps surfacing the old claim no matter
+how good the rewritten body is.
+
+**Fix policy for this section:** rewriting or retiring a memory is **Tier 2** —
+propose with the current text and the correction, then ask. Re-indexing an
+unindexed file and fixing a dangling link are Tier 1.
 
 ---
 

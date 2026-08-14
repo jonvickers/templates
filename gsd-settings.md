@@ -347,14 +347,33 @@ not from memory, and never make the user do it:
 
 1. `git fetch origin --prune`.
 2. Inspect `.planning/MILESTONES.md` **and** remote `origin/gsd/v*` branches.
-3. Treat every remote milestone version as **reserved**, even before merge.
-4. Select the next unused version after the highest completed or remotely
-   reserved one.
-5. Re-check immediately before the first push, and renumber on collision.
-6. Push the initialized milestone branch promptly so other machines see it.
+3. **Also check local worktrees.** `git worktree list`, then for each one read
+   `git log --oneline <base>..HEAD` and its `ROADMAP.md`. Remote branches alone
+   are not sufficient evidence — see the hole below.
+4. Treat every remote *and* locally-claimed version as **reserved**, even before
+   merge.
+5. Select the next unused version after the highest reserved one.
+6. Re-check immediately before the first push, and renumber on collision.
+7. **Push the milestone branch the moment it is initialized** — before research,
+   requirements, or roadmap. That is what closes the hole for everyone else.
 
 If the remote cannot be fetched, **stop before assigning a version** rather than
 risk two active milestones with the same number.
+
+> **The hole this closes.** A remote-only check cannot see a version claimed in a
+> concurrent agent's *unpushed* worktree. Hit for real on dental-payz,
+> 2026-08-11: another agent had already built v2.5 — research, requirements,
+> roadmap, five commits — inside a local worktree. `git branch -r` showed v2.4 as
+> the highest, so v2.5 was claimed twice and had to be renumbered to v2.6. Phase
+> numbers are consumed globally across workstreams, so a collision costs both the
+> version and the phase range.
+>
+> **Related shared-file hazard.** `.planning/research/` is shared, *not*
+> per-workstream. Two concurrent milestones will overwrite each other there.
+> Scope research into a subdirectory per milestone
+> (`research/v2.6-payment-portal/`). `STATE.md`, `ROADMAP.md`, and
+> `REQUIREMENTS.md` under each workstream are also touched by both — expect a
+> hand-merge, and merge the earlier milestone first.
 
 ---
 
@@ -648,7 +667,7 @@ These are the ones that bite. Read before touching.
 | **`workflow.subagent_timeout`** | **In MILLISECONDS.** The `/gsd-config --advanced` prompt mislabels it as "seconds (default 600)" — that's wrong; the runtime default is `300000` (5 min). We use `900000` (15 min) for Opus deep-reasoning headroom. **Typing `900` sets 0.9s and times out every subagent instantly.** |
 | **`context_window`** | Keep `200000` unless the agents GSD *spawns* truly run a 1M-context model. Your interactive session being on a 1M model does **not** mean spawned agents are — they use the standard Opus tier (200k). Values `≥ 500000` enable adaptive context enrichment, which would overflow 200k agents → truncation → worse output. |
 | **`commit_docs` + `/gsd-pr-branch`** | `commit_docs: true` keeps planning in git, and (because it's `true`) GSD does **not** strip `.planning/` at merge. But `/gsd-pr-branch` *deliberately* strips `.planning/` to make a clean review PR. If you merge **only** that stripped branch, planning never reaches the default branch. Always merge the real branch (squash/full) to land planning; use pr-branch only as a review artifact. |
-| **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). Doesn't travel via git unless committed in shared `settings.json`. With `branching_strategy: "milestone"` (or `"phase"`) the mismatch is otherwise *guaranteed* — a milestone branch is never `origin/HEAD`. A value only in user-level `~/.claude/settings.json` or `settings.local.json` is invisible to GSD's `base-check`; it looks applied and does nothing. Set it per repo, in the committed file. |
+| **`worktree.baseRef`** | Lives in `.claude/settings*.json`, **not** `.planning/config.json`. Required for parallel execution (see §3). With `branching_strategy: "milestone"` (or `"phase"`) the mismatch is otherwise *guaranteed* — a milestone branch is never `origin/HEAD`. **Resolution is a 3-layer cascade, first non-null wins:** repo `.claude/settings.local.json` → repo `.claude/settings.json` → user `~/.claude/settings.json`. Note what is *absent*: `~/.claude/settings.local.json` is never read. Layers 1 and 3 both work on your machine, which is exactly the trap — the repo looks configured to you and silently degrades on a teammate's fresh clone. Put it in layer 2, the committed repo file, so it travels. |
 | **`workflow.use_worktrees` on Windows** | Windows has known worktree/merge friction (merge-rollback, base mismatch). The §3 HEAD fix resolves the common mismatch. If worktree merges still misbehave, set `use_worktrees: false` (sequential) as the escape hatch. |
 | **`mode: "yolo"`** | Runs phases autonomously with no approval gates. Fine for a trusted single-owner repo (alpine-manager uses it). New/shared repos should usually start `"interactive"`. |
 | **`git.branching_strategy: "milestone"`** | Our standard (§2.1), and it carries one real cost: the branch is long-lived, so `dev` drifts underneath it. Pull from the base branch regularly while the milestone is open, and keep one developer per open milestone. Two people on one milestone → use `phase` for that repo. |
