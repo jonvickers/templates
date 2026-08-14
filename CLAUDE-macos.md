@@ -1,4 +1,16 @@
-# Global Development Environment
+# macOS workstation inventory
+
+> **This is not a `CLAUDE.md`.** Despite the filename, do **not** copy it to
+> `~/.claude/CLAUDE.md` — it carries no import of the shared rules, so a machine
+> set up from this file gets none of them.
+>
+> It is a **reference inventory** of a working macOS dev box. Use it while
+> standing up a machine, and fold anything machine-specific into
+> `~/.claude/global-machine.md`.
+>
+> For the files that actually belong in a config directory, see
+> [`examples/`](examples/README.md), and [`ONBOARD.md`](ONBOARD.md) for the order
+> to do things in.
 
 macOS workstation with Node.js full-stack development tooling.
 

@@ -56,13 +56,20 @@ this repo.
 
 ---
 
-## Older per-platform templates
+## Workstation inventories and older guides
 
-These predate the system above. They are starting points for a new machine, not
-live sources — copy and customise rather than syncing.
+These predate the system above and are **reference material, not files to copy
+into a config directory.**
 
-- [CLAUDE-windows.md](CLAUDE-windows.md) — Windows 11, fnm, pnpm, PowerShell
-- [CLAUDE-macos.md](CLAUDE-macos.md) — macOS, nvm, Homebrew, zsh
+The two `CLAUDE-*.md` files are misleadingly named: they are inventories of a
+working dev box, not `CLAUDE.md` templates. Copying one to `~/.claude/CLAUDE.md`
+would give that machine **none** of the shared rules, because neither imports
+them. Use them while installing a machine, then put anything machine-specific in
+`~/.claude/global-machine.md`. The real `CLAUDE.md` template is
+[`examples/machine/claude/CLAUDE.md.example`](examples/machine/claude/CLAUDE.md.example).
+
+- [CLAUDE-windows.md](CLAUDE-windows.md) — Windows 11 workstation inventory: fnm, pnpm, PowerShell 7, Defender and long-path settings
+- [CLAUDE-macos.md](CLAUDE-macos.md) — macOS workstation inventory: nvm, Homebrew, zsh
 - [Node.js Dev Tools — macOS](nodejs-dev-tools-macOS.md)
 - [Node.js Dev Tools — Windows](nodejs-dev-tools-PC.md)
 - [Hardening Azure + GitHub](Hardening-AzureGitHub.md)

@@ -1,7 +1,18 @@
 # Global Agent Configuration Templates
 
 This repo holds the shared, machine-neutral instruction sources that every AI CLI
-loads, plus older per-platform templates.
+loads, plus older per-platform reference material.
+
+**Entry points.** `ONBOARD.md` bootstraps a new machine (read once);
+`ai-setup-audit.md` keeps an existing one clean (run on a cadence). `ReadMe.md`
+is the human front page and points at both. If you change how a machine gets set
+up, all three need to agree.
+
+**Naming trap.** `CLAUDE-windows.md` and `CLAUDE-macos.md` are workstation
+*inventories*, not `CLAUDE.md` templates — neither imports the shared rules, so
+copying one into a config directory silently produces a machine with none of
+them. The real template is `examples/machine/claude/CLAUDE.md.example`. Don't
+"helpfully" restore the old framing.
 
 ## Synced by `sync-global-prompt.ps1`
 

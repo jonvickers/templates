@@ -105,16 +105,24 @@ is the one place where being concise is worth real money and real latency.
 
 | File | Target | Notes |
 |---|---|---|
-| `global-prompt.md` | ≤ 10 KB | ×3 CLIs, every session |
+| `global-prompt.md` | ~12 KB | ×3 CLIs, every session — the most expensive file here |
 | `global-machine.md` | ≤ 2 KB | facts only, no guidance |
 | `~/.claude/CLAUDE.md` | ≤ 4 KB | Claude-only deltas |
 | `~/.codex/AGENTS.md` preamble | ≤ 4 KB | Codex-only deltas; the rest is generated |
-| repo `AGENTS.md` | ≤ 6 KB | over 10 KB, look for content that belongs elsewhere |
+| repo `AGENTS.md` | ≤ 6 KB | over 10 KB, go looking |
 | read-on-demand files | no limit | free until opened |
 
-A file over budget is a *prompt* to look for misplaced content, not an
-automatic defect. The question is always "does this belong here," never "is this
-too long."
+**A file over budget is a prompt to look, not a defect.** The question is always
+"does this belong here," never "is this too long." Going over is fine *once you
+have looked* — and the finding you report is the specific misplaced content, not
+the byte count.
+
+Raising a number without doing that check is how a budget dies. When you do raise
+one, say what you checked and why the content earned its place. `global-prompt.md`
+was set at 10 KB by guess and now sits just over 12 KB after gaining spend
+authorization, the hardened plain-English rule, and the authorization-vs-inference
+section — all load-bearing, none of it misplaced, so the number moved rather than
+the file.
 
 ---
 
