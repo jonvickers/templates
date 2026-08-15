@@ -56,9 +56,9 @@ report. **Do not commit unless the user asks.**
    is not gitignored. Verify: `gsd-tools worktree base-check` →
    `shouldDegrade:false, reason:"baseref-head"`.
 4. **Check the landmines** ([§5](#5-settings-that-need-special-attention)):
-   `subagent_timeout` must be **milliseconds** (e.g. `900000`, never `900`);
-   `context_window` stays `200000` unless spawned agents truly have ≥500k context;
-   `mode` should be `interactive` unless this is a trusted autonomous repo.
+   `subagent_timeout` must be **milliseconds** (`1800000`, never `1800`);
+   `test_gate_timeout` is **seconds** (`900`); `context_window` stays `200000`
+   unless spawned agents truly have ≥500k context; `mode` is `yolo` (§5).
 5. **Parallel milestones?** Each developer needs **both** a workstream and their
    own milestone branch ([§2.2](#22-parallel-work-workstreams-vs-workspaces)) —
    the branching strategy stays `milestone` either way.
@@ -501,8 +501,9 @@ unless a repo-specific note says otherwise.
     "use_worktrees": true,           // parallel executors — pair with the §3 HEAD fix.
     "node_repair": true,
     "node_repair_budget": 3,         // bumped from default 2 for self-heal robustness.
-    "subagent_timeout": 900000,      // MILLISECONDS. 15 min. See §5 — do NOT write 900.
-    "test_gate_timeout": 900,        // SECONDS. Also 15 min. Yes, different unit. §5.
+    "subagent_timeout": 1800000,     // MILLISECONDS. 30 min. See §5 — do NOT write 1800.
+    "test_gate_timeout": 900,        // SECONDS. 15 min. Yes, different unit from above. §5.
+    "graphify.build_timeout": 900,   // SECONDS. 15 min. Default 300 is short for a big repo.
     "tdd_mode": false,
 
     // Leave false. Whether phases chain is decided by the COMMAND the engineer
@@ -686,9 +687,9 @@ These are the ones that bite. Read before touching.
 
 | Setting | Watch out for |
 |---|---|
-| **The two timeouts use different units** | `subagent_timeout` is **milliseconds**, `test_gate_timeout` is **seconds**. Both are 15 minutes for us, written `900000` and `900`. Reading one and copying the number into the other gives you 0.9 s or 250 hours. Check the unit every time. |
+| **The two timeouts use different units** | `subagent_timeout` is **milliseconds**, `test_gate_timeout` is **seconds**. Ours are 30 minutes and 15 minutes, written `1800000` and `900`. Reading one and copying the number into the other gives you 1.8 s or 250 hours. Check the unit every time. |
 | **`workflow.test_gate_timeout`** | **Seconds**, default 600. We use `900` (15 min), matching the subagent timeout and the wall-clock rule. Note what it is *for*: it detects a suite stuck in watch mode (vitest without `--run`), not a test budget. Raising it trades slower hang detection for not killing a legitimately long suite — worth it, but don't push it far past the point where a real suite finishes. |
-| **A slow subagent is not a stalled one** | `subagent_timeout` bounds a subagent that is *doing work*, and deep planning legitimately runs long — a dental-payz Phase 30 planner finished a 23 KB plan at 14:59 of a 15-minute ceiling. **Before treating a quiet agent as failed, check the phase directory for the artifact.** A completion message can be lost while the file is already on disk; recover it rather than re-planning. Never restart work that finished. |
+| **A slow subagent is not a stalled one** | `subagent_timeout` bounds a subagent that is *doing work*, and deep planning legitimately runs long — a dental-payz Phase 30 planner finished a 23 KB plan at 14:59 of what was then a 15-minute ceiling — which is why it is now 30. **Before treating a quiet agent as failed, check the phase directory for the artifact.** A completion message can be lost while the file is already on disk; recover it rather than re-planning. Never restart work that finished. |
 | **`workflow.subagent_timeout`** | **In MILLISECONDS.** The `/gsd-config --advanced` prompt mislabels it as "seconds (default 600)" — that's wrong; the runtime default is `300000` (5 min). We use `900000` (15 min) for Opus deep-reasoning headroom. **Typing `900` sets 0.9s and times out every subagent instantly.** |
 | **`context_window`** | Keep `200000` unless the agents GSD *spawns* truly run a 1M-context model. Your interactive session being on a 1M model does **not** mean spawned agents are — they use the standard Opus tier (200k). Values `≥ 500000` enable adaptive context enrichment, which would overflow 200k agents → truncation → worse output. |
 | **`commit_docs` + `/gsd-pr-branch`** | `commit_docs: true` keeps planning in git, and (because it's `true`) GSD does **not** strip `.planning/` at merge. But `/gsd-pr-branch` *deliberately* strips `.planning/` to make a clean review PR. If you merge **only** that stripped branch, planning never reaches the default branch. Always merge the real branch (squash/full) to land planning; use pr-branch only as a review artifact. |
@@ -913,7 +914,7 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
   is never selected by `--all` or a bare `--opencode` flag. A name in
   `default_reviewers` that is neither an instance nor a built-in slug is a hard
   error, not a silent drop.
-- **Time bounds:** give every lane **≥ 900 s** and run it in the background.
+- **Time bounds:** give every lane **≥ 1800 s (30 min)** and run it in the background.
   Capture stderr to a `.err` file — never `2>/dev/null`.
 
   There is **no config knob for this** — no GSD setting bounds a review lane, so

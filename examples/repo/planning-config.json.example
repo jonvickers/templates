@@ -59,11 +59,11 @@
     "node_repair": true,
     "node_repair_budget": 3,
 
-    // MILLISECONDS. 900000 = 15 minutes.
+    // MILLISECONDS. 1800000 = 30 minutes.
     // The /gsd-config --advanced prompt mislabels this as "seconds (default
     // 600)" — that is wrong. Typing 900 sets 0.9 s and every subagent dies
     // instantly, which looks exactly like a model failure.
-    "subagent_timeout": 900000,
+    "subagent_timeout": 1800000,
 
     // SECONDS — not milliseconds like the line above. Also 15 minutes, written
     // 900. Copying one number into the other gives you 0.9 s or 250 hours.
@@ -91,8 +91,12 @@
 
   "hooks":    { "context_warnings": true },
   "intel":    { "enabled": true },
-  "graphify": { "enabled": true }   // keep graphify-out/ and .planning/graphs/
-                                    // gitignored; commit .graphifyignore
+  "graphify": {
+    "enabled": true,               // keep graphify-out/ and .planning/graphs/
+                                   // gitignored; commit .graphifyignore
+    "build_timeout": 900           // SECONDS. 15 min. The 300 default is short
+                                   // for a large repo's graph build.
+  }
 }
 
 // DELIBERATELY ABSENT — do not add without a specific reason:
