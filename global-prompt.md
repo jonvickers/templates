@@ -133,6 +133,11 @@ Polling an external thing in a loop is the same failure with extra steps: if the
 answer will not arrive for an hour, you are idle for an hour. Set the check to
 fire when it matters and get on with something else.
 
+**This caps how long you idle, not how long a background job may run.** A build,
+a soak, or a cross-AI review is welcome to take an hour — launch it, go do other
+work, collect it when it lands. Killing a long-running job to satisfy this rule
+inverts it.
+
 Report a deferred item as **deferred with its resume condition**, not as blocked
 and not as done. "Waiting for X" is never an acceptable end state for a work
 block — say what you did instead while waiting.

@@ -874,8 +874,21 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
   is never selected by `--all` or a bare `--opencode` flag. A name in
   `default_reviewers` that is neither an instance nor a built-in slug is a hard
   error, not a silent drop.
-- **Time bounds:** give every lane ≥ 900 s and run it in the background. Capture
-  stderr to a `.err` file — never `2>/dev/null`.
+- **Time bounds:** give every lane **≥ 900 s** and run it in the background.
+  Capture stderr to a `.err` file — never `2>/dev/null`.
+
+  There is **no config knob for this** — no GSD setting bounds a review lane, so
+  the bound is whatever the invoking agent applies. That makes this rule the only
+  thing standing between a grounded review and a premature kill. `cross_ai_timeout`
+  is unrelated: it belongs to `workflow.cross_ai_execution` (execution offload,
+  deliberately off) and never touches a review.
+
+  **This does not conflict with the 15-minute wall-clock rule.** That rule forbids
+  *sitting idle* waiting; it does not cap how long a background job may run. Launch
+  the lane, go do other work, collect it when it finishes. Killing a review at 15
+  minutes to satisfy that rule is a misreading — and it produces exactly the
+  "no output, must have crashed" false diagnosis called out below. If a review
+  needs 20 minutes, give it 20 minutes and spend them on something else.
 - **Don't declare a lane dead on 0-byte interim output.** `claude -p` buffers
   stdout and stderr until its final message, so 0 bytes for 8 minutes is normal.
   Codex streams tool activity to stderr, so silence there IS meaningful.
