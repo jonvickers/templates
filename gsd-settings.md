@@ -934,16 +934,19 @@ Anything else is a decision to make, not a question to ask:
 
 ### 8.5 Wall clocks must never block a phase
 
-A phase must not stall waiting on the calendar.
+A phase must not stall waiting on the calendar. **The 15-minute limit and the
+mandatory logged follow-up are in *Never stop work waiting on a clock*
+(`global-prompt.md`) and apply everywhere, not just inside a phase.** Below is
+what that means for GSD specifically.
 
-- **One hour is the limit.** A wait up to an hour inside a plan is fine — hold it
-  inline. Anything longer must not be planned as a wait at all.
-- **Plan around the wait, don't sit in it.** If work genuinely needs elapsed time
-  — traffic to accumulate, a soak window, a propagation delay, an off-hours
-  window — split it. Do everything not depending on the elapsed time now, and
-  file the remainder as a todo under `.planning/todos/pending/` recording what
-  must be true before it runs and the exact command to resume it. Then let the
-  phase continue to its next plan.
+- **Never plan a wait longer than 15 minutes.** A shorter wait can be held inline
+  inside a plan. Anything longer must not be planned as a wait at all — a plan
+  whose step is "wait six hours" is a mis-planned phase, and the plan-checker
+  should reject it.
+- **Split it and file the remainder as a todo.** Do everything not depending on
+  the elapsed time now, then file the rest under `.planning/todos/pending/` with
+  what must be true before it runs and the exact command to resume it. Filing the
+  todo is required, not a courtesy. Then let the phase continue to its next plan.
 - **Never gate a later phase on an earlier phase's wall clock.** If Phase N+1
   doesn't consume the delayed measurement, it starts immediately. Only the plan
   that reads the result waits.

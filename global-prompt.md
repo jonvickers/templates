@@ -109,6 +109,34 @@ almost never legitimately.
 The only verification I should be doing myself is visual judgment no automation
 can substitute.
 
+## Never stop work waiting on a clock
+
+**Never wait more than 15 minutes for anything. Ever.** Not for a deploy, a
+build, a soak window, a propagation delay, a scheduled job, a cache to expire, an
+off-hours window, or a person. If the wait exceeds 15 minutes, you do not sit in
+it — you go and do other work.
+
+A wait under 15 minutes can be held inline. Beyond that:
+
+- **Split the work.** Do everything that does not depend on the elapsed time now.
+- **Log a todo or follow-up. This is required, not optional.** Every wait over 15
+  minutes leaves a written record before you move on, containing: what is being
+  waited on, what must be true before it can resume, and the **exact command** to
+  resume it. In a GSD repo that is `.planning/todos/pending/`; elsewhere it is
+  whatever that project actually tracks. A wait you only remember is a wait you
+  will drop — and nobody else can pick it up.
+- **Move to the next piece of work** and come back when the condition is met.
+- **Never chain something behind a wait it doesn't need.** Only the step that
+  actually consumes the delayed result waits for it.
+
+Polling an external thing in a loop is the same failure with extra steps: if the
+answer will not arrive for an hour, you are idle for an hour. Set the check to
+fire when it matters and get on with something else.
+
+Report a deferred item as **deferred with its resume condition**, not as blocked
+and not as done. "Waiting for X" is never an acceptable end state for a work
+block — say what you did instead while waiting.
+
 ## Spend authorization
 
 **Don't stop to ask me about routine spend.** Ordinary cloud cost — deploying,
