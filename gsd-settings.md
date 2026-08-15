@@ -699,7 +699,8 @@ These are the ones that bite. Read before touching.
 ### Deliberately left at default (don't enable without a reason)
 
 - `workflow.plan_bounce` — off; requires an external validator script to be useful.
-- `workflow.cross_ai_execution` — off; offloads execution to an external AI CLI.
+- `workflow.cross_ai_execution` — **off, and keep it off** (see §7.1 for why).
+  Pipes a plan to an external AI CLI to implement instead of GSD's own executor.
 - `workflow.auto_prune_state` — off; prompt-before-prune is safer.
 - `model_policy.*` — unset; redundant with `model_profile: "quality"` and would
   create a second, conflicting model-selection system.
@@ -851,7 +852,41 @@ fixed, what's left.
 
 ---
 
-## 7. Cross-AI review lanes
+## 7. Cross-AI: review yes, execution no
+
+### 7.1 Other AIs review our work. They never write it.
+
+**Cross-AI is for critique, not implementation.** Independent models catch what
+one model misses, so a review lane is worth its runtime. Handing the same model
+an implementation lane is not — you trade a more capable, fully-guarded executor
+for a less capable, unguarded one.
+
+Concretely: **Claude Code is the implementation runtime. Codex, Gemini, and
+opencode/grok are convergence reviewers only. Never give them an implementation
+lane.**
+
+`workflow.cross_ai_execution` is the setting that would break this. It pipes a
+plan's objective and tasks to an external CLI over stdin and lets that tool write
+the code. It stays **off**, on every repo, and turning it on is not a tuning
+decision — it costs four things at once:
+
+- **Parallelism.** Cross-AI plans run *sequentially*, discarding the wave
+  topology §2.3 exists to protect.
+- **Isolation.** GSD's executors run in harness worktrees with the typed persona
+  and the branch, write, and path guards. An external CLI runs in the main
+  working tree — the workflow literally warns about a dirty tree before invoking
+  it — so it can collide with anything else in flight.
+- **Time.** It is bounded by `cross_ai_timeout`, default **300 s**. That is the
+  one place that setting applies. Five minutes for a real implementation task,
+  then killed.
+- **Model quality.** `model_profile: quality` pins Opus for implementation.
+  Offloading hands the work to whatever the other CLI defaults to.
+
+None of that applies to review lanes, which is why those are on and generously
+bounded. Keep the two straight: **`review.*` is the good kind of cross-AI;
+`cross_ai_execution` is the bad kind.**
+
+### 7.2 Running the review lanes
 
 All four lanes (codex, gemini, claude, opencode/grok) work here. "No output /
 timed out" is a **timeout race, not a crash** — at each CLI's default effort a

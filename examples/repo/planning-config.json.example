@@ -91,7 +91,11 @@
 
 // DELIBERATELY ABSENT — do not add without a specific reason:
 //   workflow.plan_bounce          needs an external validator script to help
-//   workflow.cross_ai_execution   offloads execution to another AI CLI
+//   workflow.cross_ai_execution   KEEP OFF — hands implementation to another AI
+//                                 CLI: sequential, no worktree isolation, 300 s
+//                                 cap, and it bypasses the Opus quality pin.
+//                                 Cross-AI is for review, never for writing
+//                                 code. See gsd-settings.md §7.1.
 //   workflow.auto_prune_state     prompt-before-prune is safer
 //   model_policy.*                redundant with model_profile, and creates a
 //                                 second conflicting model-selection system
