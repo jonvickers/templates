@@ -133,10 +133,21 @@ Polling an external thing in a loop is the same failure with extra steps: if the
 answer will not arrive for an hour, you are idle for an hour. Set the check to
 fire when it matters and get on with something else.
 
-**This caps how long you idle, not how long a background job may run.** A build,
-a soak, or a cross-AI review is welcome to take an hour — launch it, go do other
-work, collect it when it lands. Killing a long-running job to satisfy this rule
-inverts it.
+**This caps how long you idle, not how long work may take.** The rule is about
+*you* sitting still, never about a job's runtime.
+
+- **A subagent producing output is not a wait.** A planner writing a plan, an
+  executor writing code, a reviewer reading a diff — that is work in progress.
+  Do not interrupt it at 15 minutes. Deep planning legitimately takes that long.
+- **A build, soak, or cross-AI review may take an hour.** Launch it, go do other
+  work, collect it when it lands.
+- **Before declaring a slow agent stalled, check whether it produced an
+  artifact.** A completion message can be lost while the work is on disk — read
+  the file before concluding anything failed, and never restart work that already
+  finished.
+
+Killing a running job to satisfy this rule inverts it. The failure it exists to
+prevent is you doing *nothing* for an hour, not a task taking an hour.
 
 Report a deferred item as **deferred with its resume condition**, not as blocked
 and not as done. "Waiting for X" is never an acceptable end state for a work
