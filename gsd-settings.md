@@ -502,6 +502,7 @@ unless a repo-specific note says otherwise.
     "node_repair": true,
     "node_repair_budget": 3,         // bumped from default 2 for self-heal robustness.
     "subagent_timeout": 900000,      // MILLISECONDS. 15 min. See §5 — do NOT write 900.
+    "test_gate_timeout": 900,        // SECONDS. Also 15 min. Yes, different unit. §5.
     "tdd_mode": false,
 
     // Leave false. Whether phases chain is decided by the COMMAND the engineer
@@ -685,6 +686,8 @@ These are the ones that bite. Read before touching.
 
 | Setting | Watch out for |
 |---|---|
+| **The two timeouts use different units** | `subagent_timeout` is **milliseconds**, `test_gate_timeout` is **seconds**. Both are 15 minutes for us, written `900000` and `900`. Reading one and copying the number into the other gives you 0.9 s or 250 hours. Check the unit every time. |
+| **`workflow.test_gate_timeout`** | **Seconds**, default 600. We use `900` (15 min), matching the subagent timeout and the wall-clock rule. Note what it is *for*: it detects a suite stuck in watch mode (vitest without `--run`), not a test budget. Raising it trades slower hang detection for not killing a legitimately long suite — worth it, but don't push it far past the point where a real suite finishes. |
 | **`workflow.subagent_timeout`** | **In MILLISECONDS.** The `/gsd-config --advanced` prompt mislabels it as "seconds (default 600)" — that's wrong; the runtime default is `300000` (5 min). We use `900000` (15 min) for Opus deep-reasoning headroom. **Typing `900` sets 0.9s and times out every subagent instantly.** |
 | **`context_window`** | Keep `200000` unless the agents GSD *spawns* truly run a 1M-context model. Your interactive session being on a 1M model does **not** mean spawned agents are — they use the standard Opus tier (200k). Values `≥ 500000` enable adaptive context enrichment, which would overflow 200k agents → truncation → worse output. |
 | **`commit_docs` + `/gsd-pr-branch`** | `commit_docs: true` keeps planning in git, and (because it's `true`) GSD does **not** strip `.planning/` at merge. But `/gsd-pr-branch` *deliberately* strips `.planning/` to make a clean review PR. If you merge **only** that stripped branch, planning never reaches the default branch. Always merge the real branch (squash/full) to land planning; use pr-branch only as a review artifact. |

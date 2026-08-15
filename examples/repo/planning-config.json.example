@@ -65,6 +65,12 @@
     // instantly, which looks exactly like a model failure.
     "subagent_timeout": 900000,
 
+    // SECONDS — not milliseconds like the line above. Also 15 minutes, written
+    // 900. Copying one number into the other gives you 0.9 s or 250 hours.
+    // Default is 600. This detects a suite stuck in watch mode (vitest without
+    // --run); it is a hang detector, not a test budget.
+    "test_gate_timeout": 900,
+
     "tdd_mode": false,
 
     // Leave false. Whether phases chain is the engineer's call at the moment
