@@ -755,13 +755,36 @@ again.
   guess.
 - Remote branches: only delete ones this milestone created.
 
-### 6.3 Tracking gaps
+### 6.3 Tracking gaps — sweep twice
 
 - `git status --porcelain -uall` and `git ls-files --others --exclude-standard`.
   Classify every hit: real source, config, or planning artifact → `git add`;
   build output or cache → gitignore.
 - Also catch the reverse — files wrongly ignored. Scan `git status --ignored
   --porcelain` for source-looking paths and confirm with `git check-ignore -v`.
+
+**Sweep again immediately before the final commit in §6.6, not just here.** The
+close ritual itself creates files after this gate runs — review write-ups,
+verification reports, audit output, summaries. A single sweep at the start
+cannot see them, and anything still untracked when the milestone archives is
+gone: `complete-milestone` moves phase directories under
+`.planning/milestones/`, and an untracked file does not move with them.
+
+This is not hypothetical. A dental-payz Phase 30 cross-AI review — the
+reviewers' full reasoning about that plan — was written after §6.3 had already
+passed, never tracked, and did not survive the archive. The plans and summaries
+were committed and fine; what was lost was the record of *why* the plan looked
+the way it did, which is exactly what you want six months later.
+
+So the second sweep is a gate, not a courtesy:
+
+```bash
+git status --porcelain -uall          # must be empty, or every entry justified
+```
+
+Anything left must be a deliberate gitignore, decided out loud — never an
+oversight. `commit_docs: true` means planning artifacts are tracked; a review or
+report you are about to discard is a decision, and it needs saying.
 
 ### 6.4 Env files
 
@@ -799,7 +822,10 @@ Commit any drift fixes separately as `chore(planning):`.
 Work these in order, one environment at a time. A failing environment blocks
 promotion to the next.
 
-1. **Commit** everything outstanding — atomic, conventional messages.
+1. **Re-sweep, then commit.** Run the §6.3 second sweep first — the gates above
+   this one produce files, and `git status --porcelain -uall` must come back
+   empty or every remaining entry must be a decision you state out loud. Then
+   commit everything outstanding, atomic, conventional messages.
 2. **Push** the milestone branch.
 3. **Merge** into the base branch per archetype, then promote all the way to
    production — Archetype A: into `main`; Archetype B: `dev` → `test` → `prod`.
