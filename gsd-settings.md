@@ -503,7 +503,6 @@ unless a repo-specific note says otherwise.
     "node_repair_budget": 3,         // bumped from default 2 for self-heal robustness.
     "subagent_timeout": 1800000,     // MILLISECONDS. 30 min. See §5 — do NOT write 1800.
     "test_gate_timeout": 900,        // SECONDS. 15 min. Yes, different unit from above. §5.
-    "graphify.build_timeout": 900,   // SECONDS. 15 min. Default 300 is short for a big repo.
     "tdd_mode": false,
 
     // Leave false. Whether phases chain is decided by the COMMAND the engineer
@@ -518,7 +517,12 @@ unless a repo-specific note says otherwise.
 
   "hooks": { "context_warnings": true },
   "intel":   { "enabled": true },
-  "graphify":{ "enabled": true }
+
+  // build_timeout lives HERE, not under workflow. GSD reads
+  // config.graphify.build_timeout straight off the repo's config.json
+  // (gsd-core/bin/lib/graphify.cjs). A copy under `workflow` is never read,
+  // so the build silently stays at the 300 s default.
+  "graphify":{ "enabled": true, "build_timeout": 900 }   // SECONDS. 15 min.
 }
 ```
 
@@ -558,6 +562,29 @@ the old branches age out.
 > broad searches to include gitignored paths (e.g. a repo that commits `.planning/`
 > and wants it searchable). Default is `false`. Leave it off unless you have a
 > reason.
+
+#### The machine-level defaults file — and what it cannot do
+
+`~/.gsd/defaults.json` looks like a machine-wide override. It is not, and
+assuming otherwise is why repos keep coming up wrong. Two limits, both verified
+against `gsd-core/bin/lib/config-loader.cjs`:
+
+**1. It is only read when a directory has no `.planning/` at all.** The
+global-defaults branch sits *after* the checks for a project config, so the file
+seeds a project at init and is never consulted again. Editing it does **nothing**
+for any repo that already exists. Those are fixed one repo at a time.
+
+**2. It forwards a fixed allow-list of keys, and `git` is not on it.** The whole
+`git` block — `branching_strategy` included — is silently dropped. So
+**milestone branching cannot be defaulted machine-wide**; a value there is inert,
+not merely overridden. `test_gate_timeout` is not forwarded either. Top-level
+`subagent_timeout` *is* (note: top level, not nested under `workflow`).
+
+The practical consequence: **every new repo starts from GSD's shipped defaults**
+— `branching_strategy: "none"` and `milestone_branch_template:
+"gsd/{milestone}-{slug}"`, neither of which is ours. Setting the `git` block per
+the archetype above is a required step of the [New-Repo Checklist](#new-repo-checklist),
+not a nicety, and no machine-level configuration can do it for you.
 
 ### 4.1 Graphify setup — required for GSD graph context
 
