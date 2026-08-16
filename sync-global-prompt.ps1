@@ -6,9 +6,12 @@
   Three files are synced:
 
     global-prompt.md   — public, vendor- and machine-neutral. Lives in this repo.
-    global-machine.md  — host names, LAN IPs, account and project ids. Lives ONLY
-                         in ~/.claude (this repo is public), and is the source of
-                         truth for its copies.
+    global-machine.md  — host names, LAN IPs, account and project ids. Never in
+                         this repo (it is public). Its master defaults to
+                         ~/.claude/global-machine.md, but -MachineSource or
+                         $env:AI_MACHINE_FILE can point elsewhere — e.g. shared
+                         private storage, so several of your own computers read
+                         one master instead of drifting apart.
     gsd-settings.md    — canonical GSD config, branching, worktree HEAD fix,
                          review lanes, and the milestone close ritual. Lives in
                          this repo.
@@ -28,7 +31,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Source = (Join-Path $PSScriptRoot 'global-prompt.md')
+    [string]$Source = (Join-Path $PSScriptRoot 'global-prompt.md'),
+    [string]$MachineSource
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,10 +45,20 @@ $body = Get-Content $Source -Raw
 $home_ = if ($env:USERPROFILE) { $env:USERPROFILE } elseif ($env:HOME) { $env:HOME } else { $HOME }
 if (-not $home_) { throw "Could not resolve a home directory (USERPROFILE, HOME and `$HOME are all empty)." }
 
-# global-machine.md is machine-local and never lives in this repo.
-$machineSource = Join-Path $home_ '.claude/global-machine.md'
-$machineBody = if (Test-Path $machineSource) { Get-Content $machineSource -Raw } else {
-    Write-Warning "No global-machine.md in ~/.claude — syncing the neutral prompt only."
+# global-machine.md holds host names, IPs, and account ids, so it never lives in
+# this public repo. Resolution order: explicit -MachineSource, then
+# $env:AI_MACHINE_FILE, then the historical ~/.claude location. The env var is
+# how one engineer keeps a single master in shared private storage and has every
+# one of their computers read it — without that path ever entering this repo.
+if (-not $MachineSource) {
+    $MachineSource = if ($env:AI_MACHINE_FILE) { $env:AI_MACHINE_FILE }
+                     else { Join-Path $home_ '.claude/global-machine.md' }
+}
+$machineBody = if (Test-Path $MachineSource) {
+    Write-Host "machine file <- $MachineSource"
+    Get-Content $MachineSource -Raw
+} else {
+    Write-Warning "No global-machine.md at $MachineSource — syncing the neutral prompt only."
     $null
 }
 
@@ -78,9 +92,17 @@ foreach ($dir in $targets) {
 foreach ($dir in @((Join-Path $home_ ".claude"), (Join-Path $home_ ".gemini"))) {
     Set-Content -Path (Join-Path $dir 'global-prompt.md') -Value $body -NoNewline
     Write-Host "synced -> $dir\global-prompt.md"
-    if ($machineBody -and $dir -ne (Join-Path $home_ ".claude")) {
-        Set-Content -Path (Join-Path $dir 'global-machine.md') -Value $machineBody -NoNewline
-        Write-Host "synced -> $dir\global-machine.md"
+    if ($machineBody) {
+        # Every config dir gets a copy, because each CLI imports the side-car
+        # from its own directory. The one case to skip is writing the master
+        # over itself, which happens when the master IS ~/.claude/global-machine.md.
+        $target = Join-Path $dir 'global-machine.md'
+        $masterPath = (Resolve-Path $MachineSource -ErrorAction SilentlyContinue).Path
+        $targetPath = (Resolve-Path $target -ErrorAction SilentlyContinue).Path
+        if (-not $masterPath -or -not $targetPath -or $masterPath -ne $targetPath) {
+            Set-Content -Path $target -Value $machineBody -NoNewline
+            Write-Host "synced -> $target"
+        }
     }
 }
 

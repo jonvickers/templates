@@ -196,9 +196,22 @@ for d in ~/.claude ~/.gemini; do
 done
 ```
 
-`global-machine.md` is the exception — it is **mastered in `~/.claude`** and
-copied out from there, and it must **never** appear in the `templates` repo (that
-repo is public). Verify both directions:
+`global-machine.md` is the exception. It must **never** appear in the `templates`
+repo (that repo is public), and its master is **not necessarily the copy in
+`~/.claude`**: `sync-global-prompt.ps1` resolves the master from `-MachineSource`,
+then `$env:AI_MACHINE_FILE`, then `~/.claude/global-machine.md`. An engineer with
+several of their own computers typically points the env var at one copy in shared
+private storage so the machines cannot drift.
+
+**Check which it is before editing anything.** If the env var is set, every
+`global-machine.md` under a config dir — including `~/.claude`'s — is a generated
+copy, and an edit there is silently destroyed by the next sync. Resolve it first:
+
+```bash
+echo "${AI_MACHINE_FILE:-$HOME/.claude/global-machine.md}"
+```
+
+Then verify both directions:
 
 ```bash
 cmp -s ~/.claude/global-machine.md ~/.gemini/global-machine.md \
