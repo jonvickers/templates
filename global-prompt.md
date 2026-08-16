@@ -308,8 +308,10 @@ gemini / claude / opencode), including one that produced no output.
 
 Open `gsd-settings.md` §7 for the exact invocations, effort overrides, per-lane
 failure modes, and time bounds before running a lane or declaring one dead. The
-one rule that can't wait for the file: "no output" is a timeout race, not a
-crash — give every lane ≥ 900 s, in the background.
+two rules that can't wait for the file: "no output" is a timeout race, not a
+crash — give every lane ≥ 1800 s, in the background. And never hand-pick the
+reviewer set: GSD skips whichever tool is hosting the session and reviews with
+the other three, so leave `review.default_reviewers` unset.
 
 ---
 

@@ -693,11 +693,48 @@ they actually do.
   Codex carries a `.toml` beside each `.md`; a `.md` with no `.toml` is not
   registered and the agent is unavailable in Codex.
 
-- **Review lanes match reality.** `gsd-settings.md` §7 is canonical for how each
-  lane is invoked. Here, only check consistency: every name in
-  `review.default_reviewers` must be either a built-in slug or a defined
-  `review.reviewer_instances` entry, and every CLI it names must be installed
-  (§0). A name that is neither is a hard error at review time, not a silent drop.
+- **All four reviewer lanes actually WORK.** Three-lane convergence is a *machine*
+  property, not a repo setting: GSD skips whichever tool hosts the session and
+  reviews with the rest, so `claude`, `codex`, `gemini`, and `opencode` must all
+  be functional or every review quietly runs with two and still reports success.
+  `gsd-settings.md` §7.2 is canonical.
+
+  **`command -v` is not the check.** Every lane's real failure mode survives an
+  install: a CLI logged out, an expired token, or — for gemini — a repo `.env`
+  shadowing `~/.gemini/.env` and producing `ProjectIdRequiredError` in that repo
+  only. Probe them live:
+
+  ```bash
+  node <templates>/tools/review-lane-check.js          # human output, exit 1 if any lane is down
+  node <templates>/tools/review-lane-check.js --json   # machine-readable
+  ```
+
+  It sends each lane a one-token prompt and checks the reply, printing the
+  failing lane's own error plus what to do about it.
+
+  **Run it from inside a repo, not just from home.** The gemini failure is
+  repo-dependent, so a pass at `~` proves nothing about a repo that commits its
+  own `.env`. Probe at least every repo with a `.planning/` directory; the script
+  warns when the current directory has a root `.env` and no `.gemini/.env`.
+
+- **No repo pins `review.default_reviewers`.** A list hard-codes which tool is the
+  host, so it is correct on the machine that wrote it and silently wrong from any
+  other CLI. It also downgrades a missing reviewer from "skipped" to an `info` the
+  review reports as success. Sweep for it and report each hit:
+
+  ```bash
+  for r in ~/Code/*/; do
+    [ -f "$r/.planning/config.json" ] || continue
+    node -e "const c=require('$r/.planning/config.json');
+      if(c.review&&c.review.default_reviewers)
+        console.log('  PINNED  $(basename $r): '+JSON.stringify(c.review.default_reviewers))" 2>/dev/null
+  done
+  echo "(no output = every repo defers to automatic host exclusion)"
+  ```
+
+  The exception is a repo deliberately using `review.reviewer_instances`, since
+  instance names are selectable only through `default_reviewers`. Confirm the
+  instances exist before treating a list as a finding.
 
 - **Contradictions between files.** If `~/.claude/CLAUDE.md` and
   `~/.codex/AGENTS.md` state different rules for the same thing, the shared

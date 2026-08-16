@@ -28,6 +28,7 @@ These four files are the system. Everything else in this repo predates it.
 | **[gsd-settings.md](gsd-settings.md)** | Canonical GSD config, branching, the worktree fix, review lanes (§7), the milestone close ritual (§6). Also a work order: run it inside a repo to bring that repo into line. |
 | **[ai-setup-audit.md](ai-setup-audit.md)** | The machine audit. Run it on a cadence. |
 | **[examples/](examples/README.md)** | One reference copy of every file a machine should have, plus the layering model — which rule belongs in which file. Read `examples/README.md` before editing any instruction file. |
+| **[tools/](tools/)** | Runnable checks. `review-lane-check.js` proves all four cross-AI review lanes actually answer (run it inside a repo); `wave-width-check.js` fails a phase that won't execute in parallel. |
 
 `global-machine.md` — host names, LAN IPs, account and project ids — is
 deliberately **not** in this repo and must never be added to it; this repo is

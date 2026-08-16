@@ -16,24 +16,35 @@ loop. You only need it once per machine.
 
 ---
 
-## 1. Install the CLIs you'll actually use
+## 1. Install all four CLIs
 
-Claude Code and Codex are the two we run day to day. Gemini is a review lane
-only — install it if you'll use cross-AI review, skip it otherwise.
-
-Verify each is on `PATH` before continuing:
+**All four, not a subset.** Cross-AI review works by GSD skipping whichever tool
+is hosting your session and reviewing with the other three, so a missing CLI
+does not disable a feature — it quietly drops you to two reviewers on a review
+that still reports success. Claude Code and Codex are what we drive day to day;
+Gemini and OpenCode exist so the other two always have company
+(`gsd-settings.md` §7.2).
 
 ```bash
-claude --version
-codex  --version
-gemini --version     # optional
-node   --version     # required by GSD's hooks
-git    --version
-gh     --version     # needed for PRs
+claude   --version
+codex    --version
+gemini   --version
+opencode --version   # npm i -g opencode-ai — needs no API key; it falls back
+                     # to its own free hosted models
+node     --version   # required by GSD's hooks
+git      --version
+gh       --version   # needed for PRs
 ```
 
 If `node` is missing, install it before GSD — GSD's hooks are Node scripts and a
 missing runtime disables them silently.
+
+Being on `PATH` is not the same as working: a CLI can be installed and logged
+out. Once you've cloned this repo (step 2), prove all four actually answer:
+
+```bash
+node tools/review-lane-check.js
+```
 
 ## 2. Clone this repo
 
@@ -144,6 +155,7 @@ baseline. Commit what it changes so the setup travels to everyone else.
 | When | Do |
 |---|---|
 | Weekly | `Read ~/.claude/ai-setup-audit.md and execute it in quick mode.` |
+| Weekly, from inside a repo you actually work in | `node <templates>/tools/review-lane-check.js` — all four lanes must reply. A logged-out CLI or a repo `.env` shadowing Gemini's config costs you a reviewer without any error. |
 | Monthly, and after any CLI or GSD upgrade | `git pull` in this repo, re-run the sync, then run the audit in full. |
 | Quarterly | Same, in deep mode. |
 | After editing `global-prompt.md`, `gsd-settings.md`, or `ai-setup-audit.md` | Re-run the sync. Editing a synced copy instead of the source is the single most common mistake; the audit flags it. |
@@ -161,5 +173,10 @@ baseline. Commit what it changes so the setup travels to everyone else.
   means §3 of `gsd-settings.md`.
 - **Gemini drops out of reviews.** A repo that commits its own `.env` shadows the
   home config. The fix and the project id are in your `global-machine.md`.
+  `tools/review-lane-check.js`, run inside that repo, is what catches it — the
+  lane fails per-repo, so a pass at `~` proves nothing.
+- **A review came back thinner than you expected.** A configured-but-broken
+  reviewer is logged as an `info` and the review still reports success. Run the
+  lane check; do not assume three lanes ran because three were available.
 - **Anything else.** Run the audit in full mode and read what it says. It exists
   so nobody has to hold this in their head.

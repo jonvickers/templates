@@ -96,6 +96,17 @@
                                    // gitignored; commit .graphifyignore
     "build_timeout": 900           // SECONDS. 15 min. The 300 default is short
                                    // for a large repo's graph build.
+  },
+
+  // Models only — see the absent list below for why there is no reviewer list.
+  "review": {
+    "models": {
+      "codex":    null,            // null = that CLI's own default
+      "gemini":   null,
+      "claude":   "sonnet",        // fast mid-tier; only runs when the host is
+                                   // NOT Claude Code
+      "opencode": "opencode/nemotron-3-ultra-free"
+    }
   }
 }
 
@@ -106,6 +117,18 @@
 //                                 cap, and it bypasses the Opus quality pin.
 //                                 Cross-AI is for review, never for writing
 //                                 code. See gsd-settings.md §7.1.
+//   review.default_reviewers      GSD already skips whichever tool is hosting
+//                                 the session and reviews with the other three.
+//                                 A list hard-codes which one is the host, so it
+//                                 is right from Claude Code and wrong from Codex
+//                                 — and it turns an uninstalled reviewer from a
+//                                 skip into a silent pass. gsd-settings.md §7.2.
+//   effort.*                      GSD's shipped tiers (light:low, standard:high,
+//                                 heavy:xhigh) are what you want. A repo block
+//                                 replaces them wholesale and has always been a
+//                                 downgrade in practice. Note it does NOT fall
+//                                 back to your session's effort — GSD never
+//                                 reads that. gsd-settings.md §5.
 //   workflow.auto_prune_state     prompt-before-prune is safer
 //   model_policy.*                redundant with model_profile, and creates a
 //                                 second conflicting model-selection system

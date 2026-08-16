@@ -69,7 +69,12 @@ report. **Do not commit unless the user asks.**
 7. **Promote any shared-but-local settings.** If `.claude/settings.local.json`
    holds values that are identical for everyone (e.g. workflow permission allows),
    move them to the shared `.claude/settings.json` per the operating context above.
-8. **Report** what changed and what still needs a human decision. Leave committing
+8. **Check the reviewer set** ([§7.2](#72-the-reviewer-set--three-lanes-picked-automatically)).
+   `review.default_reviewers` should be **absent** — GSD skips the host tool and
+   reviews with the other three on its own, so any list hard-codes which tool is
+   the host. Remove one you find, keep the per-lane pins in `review.models`, and
+   confirm all four CLIs are installed on this machine.
+9. **Report** what changed and what still needs a human decision. Leave committing
    to the user.
 
 ---
@@ -518,6 +523,11 @@ unless a repo-specific note says otherwise.
   "hooks": { "context_warnings": true },
   "intel":   { "enabled": true },
 
+  // Pin a model per lane; never list default_reviewers (§7.2 — GSD already
+  // skips the host tool and reviews with the other three).
+  "review":  { "models": { "codex": null, "gemini": null,
+                           "claude": "sonnet", "opencode": "opencode/nemotron-3-ultra-free" } },
+
   // build_timeout lives HERE, not under workflow. GSD reads
   // config.graphify.build_timeout straight off the repo's config.json
   // (gsd-core/bin/lib/graphify.cjs). A copy under `workflow` is never read,
@@ -574,11 +584,39 @@ global-defaults branch sits *after* the checks for a project config, so the file
 seeds a project at init and is never consulted again. Editing it does **nothing**
 for any repo that already exists. Those are fixed one repo at a time.
 
-**2. It forwards a fixed allow-list of keys, and `git` is not on it.** The whole
-`git` block — `branching_strategy` included — is silently dropped. So
-**milestone branching cannot be defaulted machine-wide**; a value there is inert,
-not merely overridden. `test_gate_timeout` is not forwarded either. Top-level
-`subagent_timeout` *is* (note: top level, not nested under `workflow`).
+**2. It forwards a fixed allow-list of keys, and most nested blocks are not on
+it.** `git` is the headline case — the whole block, `branching_strategy`
+included, is silently dropped, so **milestone branching cannot be defaulted
+machine-wide**. But `workflow`, `intel`, `graphify`, `hooks`, and `plan_review`
+are dropped the same way, which is the trap: the file *looks* like a config
+baseline and a `workflow` block written there does nothing at all.
+
+The forwarding reads **top-level** keys. `subagent_timeout` works because it sits
+at the top level; the identically-named `workflow.subagent_timeout` does not.
+Same for `research`, `verifier`, `plan_checker`, and `nyquist_validation` — top
+level forwards, nested under `workflow` does not. (`post_planning_gaps` is the
+lone key checked in both places.) `test_gate_timeout` is not forwarded at all.
+
+To see what a given machine actually seeds, list the file's keys against the
+forwarded set rather than assuming:
+
+```bash
+node -e "
+const d=require(process.env.HOME+'/.gsd/defaults.json');
+const fwd=['model_profile','commit_docs','research','plan_checker','verifier',
+ 'nyquist_validation','post_planning_gaps','parallelization','text_mode',
+ 'resolve_model_ids','context_window','subagent_timeout','model_overrides','models',
+ 'granularity','granularities','planning','dynamic_routing','effort','fast_mode',
+ 'agent_skills','response_language','runtime','model_profile_overrides','model_policy'];
+const k=Object.keys(d);
+console.log('seeds :', k.filter(x=>fwd.includes(x)).join(', '));
+console.log('inert :', k.filter(x=>!fwd.includes(x)).join(', '));
+"
+```
+
+**Do keep `model_profile: "quality"` and `runtime` correct there**, since those
+two *are* forwarded and a wrong value quietly starts every new repo off-baseline
+— exactly how one repo here spent months on `adaptive`.
 
 The practical consequence: **every new repo starts from GSD's shipped defaults**
 — `branching_strategy: "none"` and `milestone_branch_template:
@@ -736,9 +774,32 @@ These are the ones that bite. Read before touching.
 - `workflow.auto_prune_state` — off; prompt-before-prune is safer.
 - `model_policy.*` — unset; redundant with `model_profile: "quality"` and would
   create a second, conflicting model-selection system.
-- **Runtime model tiers** — on the Claude runtime the built-in tier IDs are already
-  current (`claude-opus-4-8` / `claude-sonnet-4-6` / `claude-haiku-4-5`); no
-  override needed.
+- **`effort.*` — leave the whole block out.** With no block, GSD uses its shipped
+  per-tier defaults: `light: low`, `standard: high`, `heavy: xhigh`, default
+  `high`. Every repo-level block we have found was a blanket *downgrade* of
+  those, usually written once and never revisited, then partly undone again by
+  `agent_overrides` pushing individual agents back up. Resolution order is
+  `agent_overrides` → `routing_tier_defaults` → `default` → manifest, so a block
+  that sets `routing_tier_defaults` replaces the shipped tiers wholesale rather
+  than adjusting them.
+
+  **Absent does not mean "inherits your session."** GSD never reads the host
+  CLI's effort setting — `effortLevel` appears nowhere in `gsd-core`. Spawned
+  agents run at the manifest tier for their role no matter what you set your own
+  session to, so dialling your session down to save tokens does not make a
+  planner cheaper. Check what a repo actually resolves rather than assuming:
+
+  ```bash
+  gsd-tools resolve-model gsd-planner     # want: opus / xhigh
+  ```
+- **Runtime model tiers** — no override needed on Claude, but not for the reason
+  this file used to give. GSD hands the Claude runtime an **alias**, not a pinned
+  ID: `gsd-tools resolve-model gsd-planner` returns `opus`, and Claude Code maps
+  that to whatever the current Opus is. The pinned IDs in GSD's shipped
+  `model-catalog.json` do go stale — it still lists `claude-opus-4-8` as top-tier
+  Opus — but on this runtime they are never reached. Confirm with `resolve-model`
+  rather than reading the catalog; a runtime *without* native aliases would use
+  those IDs and the staleness would be real there.
 
 ---
 
@@ -944,7 +1005,47 @@ None of that applies to review lanes, which is why those are on and generously
 bounded. Keep the two straight: **`review.*` is the good kind of cross-AI;
 `cross_ai_execution` is the bad kind.**
 
-### 7.2 Running the review lanes
+### 7.2 The reviewer set — three lanes, picked automatically
+
+**There are four tools, and the reviewers are always the three that are not the
+one you are driving.** GSD already does this: `gsd-core/workflows/review.md`
+reads the runtime from the environment and sets `SELF_CLI` — inside Claude Code
+it skips `claude`, inside Cursor it skips `cursor` — so the host never reviews
+its own work. Selection precedence is `explicit flags > --all >
+review.default_reviewers > all detected`, and **"all detected" is the branch you
+want**, because it is the only one that adapts to the host.
+
+That makes three-lane convergence a **machine** standard, not a repo setting:
+
+- **Keep all four working on every machine** — `claude`, `codex`, `gemini`, and
+  `opencode` (the OpenCode/Grok lane). Convergence is only real if all four
+  answer; one broken CLI quietly leaves you with two reviewers and a review that
+  still reports success. Installed is not working — prove it:
+
+  ```bash
+  node <templates>/tools/review-lane-check.js     # from inside the repo, exit 1 if a lane is down
+  ```
+
+  Run it in the repo, not just at `~`: the gemini failure below is repo-scoped.
+- **Leave `review.default_reviewers` unset.** A hard-coded list bakes in *which
+  tool is the host*: `["codex","gemini","opencode"]` is correct only when you
+  launch from Claude Code, and silently wrong from Codex, where the right three
+  include `claude`. Unset adapts; a list cannot.
+- **Pin a model per lane in `review.models` instead.** That is host-independent,
+  and it is the knob that genuinely needs a decision.
+
+`review.reviewer_instances` stays the one exception — use it only to run a single
+model-capable adapter as several distinct reviewer identities. Instance names are
+selectable *only* through `default_reviewers`, so a repo that needs instances is
+also a repo that accepts the host-baking cost above; do it deliberately.
+
+**A configured reviewer that is not installed drops silently.** In the
+`config_default` branch a missing CLI is logged as an `info`, not an error, and
+the review reports success with a thinner set — it errors only when *every*
+configured reviewer is unavailable. That is the second reason not to keep a list:
+the failure looks exactly like success.
+
+### 7.3 Running the review lanes
 
 All four lanes (codex, gemini, claude, opencode/grok) work here. "No output /
 timed out" is a **timeout race, not a crash** — at each CLI's default effort a
@@ -955,18 +1056,24 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
   stdin. Always pass the effort override — the config default is tuned for my
   interactive sessions and makes a grounded review take ~10 min.
 - **Claude:** pin `review.models.claude` to a fast mid-tier model (`sonnet` today),
-  or pass `--model sonnet`. Prefer keeping `claude` out of
-  `review.default_reviewers` so a no-flag review doesn't silently run the slow
-  host lane.
+  or pass `--model sonnet`. Claude is skipped automatically whenever Claude Code
+  is the host (§7.2), so this pin is what governs the lane on the runs where you
+  are driving something else. Do **not** try to achieve the same thing by leaving
+  `claude` out of a `default_reviewers` list — that suppresses it on every host,
+  not just its own.
 - **Gemini:** dies with `ProjectIdRequiredError` in any repo that commits its own
   root `.env` — Gemini resolves env files first-match-wins and never merges, so
   the repo `.env` shadows the home config and the lane silently drops out of every
   review. Per-repo fix and the project id are in `global-machine.md`.
-- **OpenCode / Grok:** runs through GSD's opencode adapter, so it only
-  participates via `review.reviewer_instances` + `review.default_reviewers` — it
-  is never selected by `--all` or a bare `--opencode` flag. A name in
-  `default_reviewers` that is neither an instance nor a built-in slug is a hard
-  error, not a silent drop.
+- **OpenCode / Grok:** `opencode` is a **built-in reviewer slug**, so it is picked
+  up by `--all`, by a bare `--opencode` flag, and by "all detected" like any other
+  lane — `reviewer_instances` is only needed to run it as *several* identities.
+  Install it with `npm i -g opencode-ai`. It needs no credentials to work: with an
+  empty `auth.json` it falls back to OpenCode's own free hosted models, so pin one
+  in `review.models.opencode` rather than leaving the anonymous default. Add a
+  provider key when you want a stronger third opinion — the free tier is a real
+  reviewer, not a strong one. (Verified end to end on 2026-08-16: installed with
+  zero credentials, read a repo file and reasoned about it correctly.)
 - **Time bounds:** give every lane **≥ 1800 s (30 min)** and run it in the background.
   Capture stderr to a `.err` file — never `2>/dev/null`.
 
@@ -1094,5 +1201,12 @@ Run for every new repo so GSD is set up consistently:
    (`gsd-tools query workstream.create <name>`) when a second engineer actually
    starts. They already get their own milestone branch from step 4 — both are
    needed.
-9. **Commit `.planning/config.json`** (and shared `.claude/settings.json`) so the
-   setup travels with the repo.
+9. **Leave the reviewer set alone, and prove the lanes work**
+   ([§7.2](#72-the-reviewer-set--three-lanes-picked-automatically)). Do not set
+   `review.default_reviewers`; GSD reviews with the three tools that are not
+   hosting the session. Pin a model per lane in `review.models` instead, then run
+   `node <templates>/tools/review-lane-check.js` **inside the new repo** — all
+   four must reply, and the gemini lane can fail in one repo while passing in
+   another.
+10. **Commit `.planning/config.json`** (and shared `.claude/settings.json`) so the
+    setup travels with the repo.

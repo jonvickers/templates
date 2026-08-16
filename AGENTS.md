@@ -32,6 +32,22 @@ they are read on demand, so they cost no context until needed. Keep the split
 clean — machine-scope checks belong in `ai-setup-audit.md`, repo-scope rules in
 `gsd-settings.md`, and neither should restate the other.
 
+## `tools/` — the checks that turn a prose rule into an exit code
+
+Not synced anywhere; run them from this clone or copy one into a repo.
+
+- `review-lane-check.js` — probes all four cross-AI review lanes (claude, codex,
+  gemini, opencode) with a one-token prompt and fails if any doesn't reply.
+  Presence on `PATH` is not the check: a logged-out CLI, or a repo `.env`
+  shadowing `~/.gemini/.env`, silently costs a reviewer on a review that still
+  reports success. **Run it inside a repo** — the gemini failure is repo-scoped.
+- `wave-width-check.js` — turns the wave-topology targets in `gsd-settings.md`
+  §2.3 into an exit code. Run before dispatching a phase.
+
+Both back rules written elsewhere, so a change to either needs the prose changed
+with it: `gsd-settings.md` §7.2 and §2.3 respectively, plus `ai-setup-audit.md`
+§7 for the lane check.
+
 ## `examples/` — what a healthy machine looks like
 
 One reference copy of every file a developer should have, machine-level and
