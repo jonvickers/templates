@@ -77,6 +77,18 @@ the older one will hit keys it doesn't understand.
 > On Codex, `~/.codex/skills/` being empty is **normal**. GSD installs Codex
 > skills to `~/.agents/skills/` instead. Don't reinstall chasing that.
 
+On Windows, patch both installs before you trust a review:
+
+```bash
+node <templates>/tools/gsd-patch-check.js --fix
+```
+
+A fresh GSD cannot start the reviewer CLIs on Windows at all — npm installs them
+as `.cmd` shims and GSD's runner spawns them in a way Windows won't resolve, so
+every lane but `claude` dies instantly, and `claude` is the lane the host skips.
+Each update reverts the fix, so this is a habit, not a one-off:
+`ai-setup-audit.md` §4.1.
+
 ## 4. Create your machine file
 
 This is the only file you write by hand, and the only one that never leaves your
@@ -156,6 +168,7 @@ baseline. Commit what it changes so the setup travels to everyone else.
 |---|---|
 | Weekly | `Read ~/.claude/ai-setup-audit.md and execute it in quick mode.` |
 | Weekly, from inside a repo you actually work in | `node <templates>/tools/review-lane-check.js` — all four lanes must reply. A logged-out CLI or a repo `.env` shadowing Gemini's config costs you a reviewer without any error. |
+| After every GSD update (Windows) | `node <templates>/tools/gsd-patch-check.js --fix` — the update reverts the local runtime patch, and without it every reviewer lane but `claude` fails to launch. |
 | Monthly, and after any CLI or GSD upgrade | `git pull` in this repo, re-run the sync, then run the audit in full. |
 | Quarterly | Same, in deep mode. |
 | After editing `global-prompt.md`, `gsd-settings.md`, or `ai-setup-audit.md` | Re-run the sync. Editing a synced copy instead of the source is the single most common mistake; the audit flags it. |

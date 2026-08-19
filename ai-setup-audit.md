@@ -478,6 +478,10 @@ the updater is failing and the install is frozen at whatever it last managed.
 Behind by a patch is normal (the session-start hook updates on its own schedule).
 Behind by a minor or major, or a failed outcome, warrants running `/gsd-update`.
 
+**An update reverts the local runtime patch** and takes cross-AI review down in
+every repo on the machine at once. Reapply it as part of updating, not at the
+next audit — §4.1 has the one-liner.
+
 ### 3.3 File-level integrity — the check that finds real breakage
 
 GSD writes a SHA-256 for every file it installs. This catches partial installs,
@@ -584,6 +588,40 @@ baseline drifted and three-way merges will be unreliable — report it.
 
 **No `gsd-local-patches/` directory at all is the healthy state.** Say so
 plainly rather than omitting the section.
+
+### 4.1 The patch we carry on purpose
+
+One fix is carried deliberately, and every `/gsd-update` reverts it. It is an
+in-place edit, so it leaves nothing in `gsd-local-patches/` — "no directory is
+the healthy state" still holds above, and is precisely why this one has to be
+checked on its own:
+
+- **Windows shim resolution** (`open-gsd/gsd-core` #3086, still present in
+  1.10.0, the current `latest` — so upgrading is not the fix). `review-lane
+  invoke` spawns each reviewer with `shell:false`, then decides whether to
+  mediate through `cmd.exe` by testing whether the *configured* binary name ends
+  in `.cmd`. Every lane configures a bare name, so the test never fires, and
+  Windows cannot start the `.cmd` shims npm installs — every lane dies instantly
+  with `ENOENT`. `claude` survives only because it installs as a real `.exe`, and
+  `claude` is the one lane GSD skips when Claude Code is the host: a
+  Claude-driven review therefore reaches **zero** working reviewers, and each
+  dead lane writes a stub that reads exactly like a reviewer with no concerns.
+
+```bash
+node <templates>/tools/gsd-patch-check.js         # every install, exit 1 if a patch is missing
+node <templates>/tools/gsd-patch-check.js --fix   # reapply, verify, self-revert if it breaks
+```
+
+It checks **every** config directory rather than the one you happen to be
+driving. `~/.claude/gsd-core` and `~/.codex/gsd-core` are independent installs,
+and the Codex one stayed broken after the Claude one was fixed by hand. It also
+recognises the fix by shape, not by our own marker, so an upstream fix reads as
+patched and is left alone rather than overwritten (the retirement question in §4
+above, answered mechanically).
+
+Static only: a patched runtime with a logged-out CLI behind it is still a dead
+reviewer. §7's live lane probe is the other half, and neither substitutes for the
+other.
 
 ---
 
@@ -711,6 +749,13 @@ they actually do.
 
   It sends each lane a one-token prompt and checks the reply, printing the
   failing lane's own error plus what to do about it.
+
+  **Every lane down at once is a patch problem, not a login problem.** On Windows
+  GSD's own runner cannot start the reviewer CLIs without the local patch in
+  §4.1, and it fails identically for all three non-`.exe` lanes. Run
+  `node <templates>/tools/gsd-patch-check.js` first — it explains an
+  all-lanes-down result in one line, and no amount of re-authenticating will fix
+  what it finds.
 
   **Run it from inside a repo, not just from home.** The gemini failure is
   repo-dependent, so a pass at `~` proves nothing about a repo that commits its

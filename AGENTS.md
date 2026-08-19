@@ -45,12 +45,21 @@ Not synced anywhere; run them from this clone or copy one into a repo.
   is derived from the release dates in opencode's cached models.dev catalog, not
   hard-coded, so it survives the next xAI release; `--fix` rewrites the one file
   that holds it. **Run it inside a repo** — the gemini failure is repo-scoped.
+- `gsd-patch-check.js` — checks every GSD install on the machine for the local
+  runtime patches we carry, and reapplies them with `--fix`. Today that is the
+  Windows shim fix (`open-gsd/gsd-core` #3086): without it GSD's own runner
+  cannot start an npm `.cmd` shim, so every reviewer lane but `claude` dies with
+  `ENOENT` — and `claude` is the lane the host skips. **Every `/gsd-update`
+  reverts it**, in all repos at once, which is the whole reason this file exists.
+  It reads the fix by shape rather than by our marker, so an upstream fix is left
+  alone. Static half only — pair it with `review-lane-check.js`.
 - `wave-width-check.js` — turns the wave-topology targets in `gsd-settings.md`
   §2.3 into an exit code. Run before dispatching a phase.
 
-Both back rules written elsewhere, so a change to either needs the prose changed
-with it: `gsd-settings.md` §7.2 and §2.3 respectively, plus `ai-setup-audit.md`
-§7 for the lane check.
+Each backs rules written elsewhere, so changing one needs the prose changed with
+it: `gsd-settings.md` §7.2 (lanes and the post-update patch check) and §2.3
+(wave width), plus `ai-setup-audit.md` §7 for the lane check and §4.1 for the
+patch.
 
 ## `examples/` — what a healthy machine looks like
 
