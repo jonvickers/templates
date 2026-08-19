@@ -35,6 +35,7 @@
  *   node tools/review-lane-check.js --lane gemini,codex
  *   node tools/review-lane-check.js --models-only  # skip the live probes
  *   node tools/review-lane-check.js --skip-models  # probes only, as before
+ *   node tools/review-lane-check.js --fix          # rewrite a stale machine default
  *
  * Run it from INSIDE a repo you care about, not just from home: the gemini
  * failure above is repo-dependent and a probe run from home will pass while
@@ -89,7 +90,7 @@ const LANES = {
 };
 
 function parseArgs(argv) {
-  const opts = { json: false, timeout: 120, lanes: Object.keys(LANES), probes: true, models: true };
+  const opts = { json: false, timeout: 120, lanes: Object.keys(LANES), probes: true, models: true, fix: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json') opts.json = true;
@@ -97,6 +98,7 @@ function parseArgs(argv) {
     else if (a === '--lane') opts.lanes = String(argv[++i]).split(',').map((s) => s.trim());
     else if (a === '--skip-models') opts.models = false;
     else if (a === '--models-only') opts.probes = false;
+    else if (a === '--fix') opts.fix = true;
     else if (a === '-h' || a === '--help') opts.help = true;
     else {
       console.error(`unknown argument: ${a}`);
@@ -271,6 +273,25 @@ function opencodeDefaults() {
     .map((f) => ({ file: f, model: (readJsonish(f) || {}).model }));
 }
 
+/**
+ * Rewrite the machine default's `model` in place, under --fix.
+ *
+ * Only ever touches that one key, and only in a strict-JSON file: reformatting
+ * someone's commented .jsonc to change one string would lose the comments, so a
+ * file that does not round-trip is reported rather than mangled.
+ */
+function applyDefault(file, model) {
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw); // deliberately strict — see above
+    parsed.model = model;
+    fs.writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: `${e.message} — edit the "model" key by hand` };
+  }
+}
+
 /** gsd-tools, found the way GSD's own workflow shims find it. */
 function findGsdTools(cwd) {
   const candidates = [
@@ -306,7 +327,7 @@ function laneVariant(cwd) {
   return { argv, level: (argv.match(/--variant\s+(\S+)/) || [])[1] || null };
 }
 
-function modelChecks(cwd) {
+function modelChecks(cwd, fix) {
   const out = [];
   const latest = latestGrok();
 
@@ -350,39 +371,56 @@ function modelChecks(cwd) {
       detail: declared.map((d) => `${d.file} → ${d.model}`).join('  ·  '),
     });
   } else if (declared[0].model !== latest.model) {
+    const fixed = fix ? applyDefault(declared[0].file, latest.model) : null;
     out.push({
       check: 'opencode default',
-      ok: false,
-      reason: `${declared[0].model}, not ${latest.model}`,
-      detail: `${declared[0].file} — a Grok version behind is a quieter downgrade than a broken lane, because the lane still replies`,
+      ok: Boolean(fixed && fixed.ok),
+      reason: fixed && fixed.ok
+        ? `${declared[0].model} → ${latest.model} (updated)`
+        : `${declared[0].model}, not ${latest.model}`,
+      detail: fixed && !fixed.ok
+        ? `could not rewrite ${declared[0].file}: ${fixed.error}`
+        : fixed
+          ? declared[0].file
+          : `${declared[0].file} — a Grok version behind is a quieter downgrade than a broken lane, because the lane still replies. Re-run with --fix to update it.`,
     });
   } else {
     out.push({ check: 'opencode default', ok: true, reason: `${declared[0].model} (${declared[0].file})` });
   }
 
-  // 2. The repo's own pin. Host-independent, so it is what makes the reviewer
-  //    the same model on a teammate's machine (gsd-settings.md §7.2).
+  // 2. The repo pin, which should NOT be set. Verified against GSD's own
+  //    resolver: with review.models.opencode unset the lane omits --model
+  //    entirely, so opencode falls back to the machine default above. That
+  //    makes the version live in ONE file per machine instead of one per repo.
+  //    A Grok version goes stale every few weeks, and a stale pin still replies
+  //    — twelve copies of a number that silently rots is the failure mode, not
+  //    the fix. (This is why opencode differs from `claude: "sonnet"`: that pin
+  //    is a stable alias the vendor repoints, so it never goes stale.)
   const planningConfig = path.join(cwd, '.planning', 'config.json');
   if (!fs.existsSync(planningConfig)) {
-    out.push({ check: 'repo pin', ok: true, reason: 'no .planning/config.json here — not a GSD repo, nothing to pin' });
+    out.push({ check: 'repo pin', ok: true, reason: 'no .planning/config.json here — not a GSD repo' });
   } else {
     const cfg = readJsonish(planningConfig) || {};
     const pin = cfg.review && cfg.review.models ? cfg.review.models.opencode : undefined;
-    if (pin === latest.model) {
-      out.push({ check: 'repo pin', ok: true, reason: `review.models.opencode = ${pin}` });
-    } else if (pin === undefined || pin === null || pin === '') {
+    if (pin === undefined || pin === null || pin === '') {
       out.push({
         check: 'repo pin',
-        ok: false,
-        reason: 'review.models.opencode unset',
-        detail: `the lane falls through to whatever this machine defaults to, so a teammate gets a different reviewer — set it to "${latest.model}"`,
+        ok: true,
+        reason: 'review.models.opencode unset — lane inherits the machine default (correct)',
+      });
+    } else if (pin === latest.model) {
+      out.push({
+        check: 'repo pin',
+        ok: true,
+        reason: `review.models.opencode = ${pin} — current, but it will rot`,
+        detail: 'prefer unsetting it so the version lives only in the machine config: gsd-tools config-set review.models.opencode null',
       });
     } else {
       out.push({
         check: 'repo pin',
         ok: false,
-        reason: `review.models.opencode = ${JSON.stringify(pin)}, not ${latest.model}`,
-        detail: 'gsd-tools config-set review.models.opencode ' + latest.model,
+        reason: `review.models.opencode = ${JSON.stringify(pin)}, but the newest Grok is ${latest.model}`,
+        detail: 'this repo overrides the machine default with a stale model — unset it: gsd-tools config-set review.models.opencode null',
       });
     }
   }
@@ -440,7 +478,7 @@ function main() {
     return r;
   });
 
-  const models = !opts.models ? [] : modelChecks(cwd);
+  const models = !opts.models ? [] : modelChecks(cwd, opts.fix);
   if (models.length && !opts.json) {
     console.log('');
     console.log('  opencode model pins — a lane that replies can still be the wrong Grok:');

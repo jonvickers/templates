@@ -43,8 +43,8 @@ Not synced anywhere; run them from this clone or copy one into a repo.
   `~/.gemini/.env`, silently costs a reviewer on a review that still reports
   success — and a stale Grok pin still replies, so it looks like a pass. "Newest"
   is derived from the release dates in opencode's cached models.dev catalog, not
-  hard-coded, so it survives the next xAI release. **Run it inside a repo** — the
-  gemini failure and the model pin are both repo-scoped.
+  hard-coded, so it survives the next xAI release; `--fix` rewrites the one file
+  that holds it. **Run it inside a repo** — the gemini failure is repo-scoped.
 - `wave-width-check.js` — turns the wave-topology targets in `gsd-settings.md`
   §2.3 into an exit code. Run before dispatching a phase.
 

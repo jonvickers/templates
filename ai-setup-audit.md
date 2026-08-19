@@ -733,9 +733,17 @@ they actually do.
   keeps working after xAI ships the next one. Then it checks three things
   against that answer: the machine default in
   `~/.config/opencode/opencode.json`, the repo's `review.models.opencode`, and
-  the reasoning effort the automatic lane will use. Fix a drifted machine default
-  here; a drifted repo pin is `gsd-settings.md` §7.3's business, and §8's repo
-  sweep is where you catch it across every repo at once.
+  the reasoning effort the automatic lane will use.
+
+  **The machine default is the only place this version should live**, which is
+  what makes it a machine check rather than a repo one. A repo that sets
+  `review.models.opencode` overrides it with a value that will rot; the script
+  flags that as a finding, and `gsd-settings.md` §7.3 explains why unset is the
+  configured state. Repair the machine default in place:
+
+  ```bash
+  node <templates>/tools/review-lane-check.js --models-only --fix
+  ```
 
   The effort line reports and never fails. The automatic lane runs Grok at
   `--variant low` and there is no config that changes only that — see

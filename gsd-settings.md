@@ -525,8 +525,11 @@ unless a repo-specific note says otherwise.
 
   // Pin a model per lane; never list default_reviewers (§7.2 — GSD already
   // skips the host tool and reviews with the other three).
+  // opencode stays null ON PURPOSE — the Grok version lives in
+  // ~/.config/opencode/opencode.json, one place per machine, not twelve
+  // repos that rot silently (§7.3).
   "review":  { "models": { "codex": null, "gemini": null,
-                           "claude": "sonnet", "opencode": "xai/grok-4.6" } },
+                           "claude": "sonnet", "opencode": null } },
 
   // build_timeout lives HERE, not under workflow. GSD reads
   // config.graphify.build_timeout straight off the repo's config.json
@@ -1094,29 +1097,49 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
   empty `auth.json` it falls back to OpenCode's own free hosted models, which is a
   real reviewer but not a strong one. **This is our Grok seat, so give it a Grok.**
 
-  - **Sign in to xAI** (`opencode auth login`), then pin the newest Grok in both
-    places: `"model": "xai/grok-4.6"` in `~/.config/opencode/opencode.json` (what
-    an interactive run and any unpinned lane uses) and
-    `review.models.opencode: "xai/grok-4.6"` in the repo (host-independent, so a
-    teammate's review uses the same model).
-  - **"Newest" is a lookup, not a memory.** Grok ships a new version every few
-    weeks and a pin written once is a silent downgrade a month later — the lane
-    still replies, just from an older model. OpenCode caches the models.dev
+  - **Sign in to xAI** (`opencode auth login`), set `"model": "xai/grok-4.6"` in
+    `~/.config/opencode/opencode.json`, and **leave `review.models.opencode`
+    unset.** That is the whole configuration, and the second half is the load-
+    bearing half.
+  - **This lane is the documented exception to "pin a model per lane."** §7.2 is
+    still right for the others, because `claude: "sonnet"` is a stable *alias* —
+    the vendor repoints it and it never goes stale. `xai/grok-4.6` is a *version*,
+    and xAI ships a new one every few weeks. A version pinned in twelve repos is
+    twelve copies of a number that rots, and it rots invisibly: the lane still
+    replies, just from an older model. So the version lives in exactly one file
+    per machine.
+
+    Verified against GSD's own resolver on 2026-08-19: with
+    `review.models.opencode` unset the lane's argv is
+    `opencode run --variant low --format json -` — **no `--model` at all** — so
+    opencode falls back to its own config default. Setting the key adds
+    `--model <pin>` and overrides the machine. Unset is not "unconfigured" here;
+    it is the configuration.
+  - **"Newest" is a lookup, not a memory.** OpenCode caches the models.dev
     catalog at `~/.cache/opencode/models.json` with a `release_date` per model;
     the newest plain `grok-<version>` with `reasoning: true` is the answer. As of
     2026-08-19 that is `grok-4.6` (released 2026-08-12), ahead of `grok-4.5`
     (2026-07-08). Ignore the dated snapshots (`grok-4.20-0309-*`, released
     2026-03-09 despite the higher-looking number), the `grok-imagine-*` image
-    models, and `grok-build-*`. `tools/review-lane-check.js` in the templates repo
-    does this derivation and fails when either pin has drifted.
+    models, and `grok-build-*`. There is no `xai/*-latest` alias to point at
+    instead — the only `grok-latest` in the catalog belongs to a third-party
+    reseller, which is not what you want holding a reviewer seat.
+
+    So the one file still needs updating, just rarely and in one place. Don't do
+    it by hand:
+
+    ```bash
+    node <templates>/tools/review-lane-check.js --models-only        # names the drift
+    node <templates>/tools/review-lane-check.js --models-only --fix  # rewrites it
+    ```
   - **The automatic lane runs Grok at LOW reasoning, and that is not fixable in
-    config.** GSD builds the lane as
-    `opencode run --model <pin> --variant <effort> --format json -`, and resolves
-    `<effort>` from one agent — `gsd-plan-checker` — which sits on the light tier
-    at `low`. The only lever is an `effort` block, and adding one costs the
-    planner a tier (§5 has the measurements). Take the low-effort lane as the
-    automatic third opinion, and when you want Grok at full strength, run it
-    yourself against the same prompt:
+    config.** GSD resolves the `--variant <effort>` argument from one agent —
+    `gsd-plan-checker` — which sits on the light tier at `low`. The only lever is
+    an `effort` block, and adding one costs the planner a tier (§5 has the
+    measurements). It also fits the lane's 11-minute kill floor below: a
+    high-effort Grok would be at real risk of being killed mid-answer. Take the
+    low-effort lane as the automatic third opinion, and when you want Grok at
+    full strength, run it yourself against the same prompt, unbounded:
 
     ```bash
     opencode run --model xai/grok-4.6 --variant high --format json - < .planning/.../gsd-review-prompt.md
@@ -1129,11 +1152,25 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
 - **Time bounds:** give every lane **≥ 1800 s (30 min)** and run it in the background.
   Capture stderr to a `.err` file — never `2>/dev/null`.
 
-  There is **no config knob for this** — no GSD setting bounds a review lane, so
-  the bound is whatever the invoking agent applies. That makes this rule the only
-  thing standing between a grounded review and a premature kill. `cross_ai_timeout`
-  is unrelated: it belongs to `workflow.cross_ai_execution` (execution offload,
-  deliberately off) and never touches a review.
+  There is **no config knob for this** — no GSD setting bounds a review lane.
+  `cross_ai_timeout` is unrelated: it belongs to `workflow.cross_ai_execution`
+  (execution offload, deliberately off) and never touches a review.
+
+  But **the automatic path is not unbounded either**, and this file used to imply
+  it was. Each lane descriptor carries a hard-coded `timeoutFloorMs` that the
+  runner enforces on its own spawn, and they are shorter than the rule above:
+
+  | lane | killed at |
+  |---|---|
+  | `opencode` | 660 s (11 min) |
+  | `gemini` | 900 s (15 min) |
+  | `claude`, `codex` | 1200 s (20 min) |
+
+  So ≥ 1800 s is the bound *you* give the wrapping Bash call, and it exists to
+  stop you killing a lane the runner would have let finish — not to extend one
+  past its floor. When an automatic lane comes back empty at almost exactly one
+  of these numbers, that is the floor, not the model. Re-run that lane by hand
+  with no bound rather than concluding it is broken.
 
   **This does not conflict with the 15-minute wall-clock rule.** That rule forbids
   *sitting idle* waiting; it does not cap how long a background job may run. Launch

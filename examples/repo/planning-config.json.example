@@ -106,15 +106,16 @@
       "claude":   "sonnet",        // fast mid-tier; only runs when the host is
                                    // NOT Claude Code
 
-      // This is the Grok seat. Pin the NEWEST Grok, and re-check it — xAI ships
-      // a new version every few weeks and a stale pin still replies, so the lane
-      // looks healthy while quietly reviewing with an older model. "Newest" is
-      // the highest release_date among plain grok-<version> reasoning models in
-      // ~/.cache/opencode/models.json, not the biggest-looking number (the
-      // grok-4.20-0309-* snapshots are from March). Set the same value as the
-      // machine default in ~/.config/opencode/opencode.json, and prove both with
-      // `node <templates>/tools/review-lane-check.js`.
-      "opencode": "xai/grok-4.6"
+      // NULL ON PURPOSE — this one is the exception to "pin a model per lane".
+      // With it unset the lane omits --model entirely and opencode uses its own
+      // default from ~/.config/opencode/opencode.json, so the Grok version lives
+      // in ONE file per machine. Pin it here and you get a copy per repo of a
+      // number that goes stale every few weeks — and a stale pin still replies,
+      // so the lane looks healthy while reviewing with an older model. "sonnet"
+      // above is safe to pin because it is an alias the vendor repoints;
+      // "xai/grok-4.6" is a version and rots. gsd-settings.md §7.3.
+      //   node <templates>/tools/review-lane-check.js --models-only --fix
+      "opencode": null
     }
   }
 }
