@@ -317,24 +317,39 @@ function capHelperSource(indent) {
     '  const raw = configGet(lane.modelConfigKey);',
     "  let model = typeof raw === 'string' ? raw.trim() : '';",
     '  let src = lane.modelConfigKey;',
-    "  if ((!model || model === 'null') && lane.slug === 'opencode') {",
-    '    // The house convention leaves `review.models.opencode` UNSET so the Grok version lives in',
-    '    // ONE machine file rather than one per repo. GSD then omits --model and opencode uses its',
-    '    // own default — so that file, not the repo config, is where the model is knowable.',
+    "  if (!model || model === 'null') {",
+    '    // An unset `review.models.<slug>` is not "unknown" for every lane. The house convention',
+    '    // deliberately leaves opencode unpinned so the Grok version lives in ONE machine file',
+    '    // rather than one per repo, and codex carries its own default in config.toml. GSD omits',
+    '    // --model in both cases, so the CLI\'s own config — not the repo config — is where the',
+    '    // model is knowable. Without this, the correctly configured lane is the one that loses',
+    '    // its cap.',
     "    const _fs = require('node:fs');",
     "    const _path = require('node:path');",
     "    const _os = require('node:os');",
-    "    for (const dir of [process.env.XDG_CONFIG_HOME, _path.join(_os.homedir(), '.config')]) {",
-    '      if (!dir) continue;',
-    "      for (const f of ['opencode.json', 'opencode.jsonc']) {",
-    '        try {',
-    "          const txt = _fs.readFileSync(_path.join(dir, 'opencode', f), 'utf8')",
-    "            .replace(/(\"(?:\\\\.|[^\"\\\\])*\")|\\/\\*[\\s\\S]*?\\*\\/|\\/\\/[^\\n]*/g, (m, s) => s || '')",
-    "            .replace(/,(\\s*[}\\]])/g, '$1');",
-    '          const val = JSON.parse(txt).model;',
-    "          if (typeof val === 'string' && val.trim()) { model = val.trim(); src = _path.join(dir, 'opencode', f); }",
-    '        } catch { /* next candidate */ }',
+    "    if (lane.slug === 'opencode') {",
+    "      for (const dir of [process.env.XDG_CONFIG_HOME, _path.join(_os.homedir(), '.config')]) {",
+    '        if (!dir) continue;',
+    "        for (const f of ['opencode.json', 'opencode.jsonc']) {",
+    '          try {',
+    "            const txt = _fs.readFileSync(_path.join(dir, 'opencode', f), 'utf8')",
+    "              .replace(/(\"(?:\\\\.|[^\"\\\\])*\")|\\/\\*[\\s\\S]*?\\*\\/|\\/\\/[^\\n]*/g, (m, s) => s || '')",
+    "              .replace(/,(\\s*[}\\]])/g, '$1');",
+    '            const val = JSON.parse(txt).model;',
+    "            if (typeof val === 'string' && val.trim()) { model = val.trim(); src = _path.join(dir, 'opencode', f); }",
+    '          } catch { /* next candidate */ }',
+    '        }',
     '      }',
+    "    } else if (lane.slug === 'codex') {",
+    "      const home = process.env.CODEX_HOME || _path.join(_os.homedir(), '.codex');",
+    '      try {',
+    '        // Top-level `model = "..."` only. A key inside a [profile.*] table is not the default,',
+    '        // and matching one would cap against a model this lane never runs.',
+    "        const toml = _fs.readFileSync(_path.join(home, 'config.toml'), 'utf8');",
+    "        const top = toml.split(/^\\s*\\[/m)[0];",
+    '        const m = top.match(/^\\s*model\\s*=\\s*["\']([^"\']+)["\']/m);',
+    "        if (m) { model = m[1].trim(); src = _path.join(home, 'config.toml'); }",
+    '      } catch { /* no codex config */ }',
     '    }',
     '  }',
     "  if (!model || model === 'null') {",
@@ -500,10 +515,42 @@ function main(argv) {
         result = fixed
           ? { status: 'patched', detail: `reapplied — ${applied.reason}` }
           : { status: 'unpatched', detail: `could not apply: ${applied.reason}` };
+        // RE-READ. Each `apply` splices the source string it was handed and writes the whole file,
+        // so a second patch working from the stale copy silently REVERTS the first — and both
+        // still verify, because each checks only its own output. That is precisely the
+        // "green while broken" failure these patches exist to prevent, so it is not allowed to
+        // live in the checker itself. (Found the hard way: with two patches the shim fix was
+        // reapplied, then erased by the cap patch, and only the live lane probe noticed.)
+        if (fixed) {
+          try { source = fs.readFileSync(install.tools, 'utf8'); } catch { /* keep what we have */ }
+        }
       }
       report.push({
         ...install, patch: patch.id, issue: patch.issue, status: result.status, detail: result.detail, fixed,
       });
+    }
+
+    // Belt and braces on the same failure: whatever the loop believed, re-read the file from disk
+    // and re-inspect every patch, then report THAT. An `apply` verifies only its own output, so
+    // without this a patch that undid an earlier one is reported as two successes. The report must
+    // describe the file that exists, not the sequence of edits we think we made.
+    if (fix) {
+      let finalSource;
+      try { finalSource = fs.readFileSync(install.tools, 'utf8'); } catch { finalSource = null; }
+      if (finalSource !== null) {
+        for (const row of report) {
+          if (row.tools !== install.tools || !row.patch) continue;
+          const patch = PATCHES.find((p) => p.id === row.patch);
+          if (!patch || !patch.appliesOn()) continue;
+          const truth = patch.inspect(finalSource);
+          if (truth.status !== row.status) {
+            const claimed = row.status;
+            row.status = truth.status;
+            row.detail = `${truth.detail} (final on-disk state — the earlier report of "${claimed}" did not survive the other patches)`;
+            row.fixed = false;
+          }
+        }
+      }
     }
   }
 
