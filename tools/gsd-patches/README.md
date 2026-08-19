@@ -56,5 +56,11 @@ declares `promptBudgetKey: null` while the three local-server lanes (`ollama`, `
 it most. Its context-window derivation reads the models.dev catalog opencode caches
 locally, which is fine for one machine and wrong as a library dependency. Upstream would also want a
 `PROMPT_EXCEEDS_CONTEXT` member in `LANE_UNAVAILABLE` (the local patch reuses the declared
-`budget_too_small` rather than extending a frozen enum). The defect is described at the end of
-`3086-issue-body.md` so it is at least on the record.
+`budget_too_small` rather than extending a frozen enum).
+
+**Filed upstream as [#3691](https://github.com/open-gsd/gsd-core/issues/3691)** (2026-08-19), which
+also carries a second defect found while verifying it: `review.max_prompt_tokens` is listed in
+`config-schema.manifest.json` as a valid key but is declared by no capability, so the resolver drops
+it and `budgetFor`'s documented fallback to it is dead code. That is why the missing per-lane key
+cannot be worked around from config — neither route reaches a CLI lane. The issue asks for the two
+config-level fixes, not for our patch's shape.

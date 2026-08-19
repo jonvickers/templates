@@ -618,7 +618,8 @@ review that did not happen, reported as a review with no concerns.**
   and leaves it alone, so the upgrade needs no coordination — but until you take
   it, the patch is still load-bearing on 1.10.0 and the check still carries it.
 
-- **Per-lane prompt cap** (unfiled upstream). Every CLI lane declares
+- **Per-lane prompt cap** ([#3691](https://github.com/open-gsd/gsd-core/issues/3691), filed
+  2026-08-19; still present in 1.11.0). Every CLI lane declares
   `promptBudgetKey: null`, so `review-lane plan` reports `promptBudget: null` and
   **no size limit is applied to a review prompt at all**. A review prompt on a
   mature repo runs to hundreds of KB. Past the model's context window nothing
