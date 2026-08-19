@@ -1,0 +1,75 @@
+--- a/gsd-core/bin/gsd-tools.cjs
++++ b/gsd-core/bin/gsd-tools.cjs
+@@ -1376,6 +1376,57 @@
+       return;
+     }
+ 
++    /**
++     * Resolve a configured command name to a real executable file, the way `where` and cmd.exe do.
++     *
++     * #3086 mediated `.cmd`/`.bat` through cmd.exe but gated on the CONFIGURED binary name, and
++     * every reviewer lane declares a BARE one (`codex`, `gemini`, `opencode` — see
++     * review-lane-descriptor `invoke.binary`). `/\.(cmd|bat)$/.test('codex')` is false, so the shim
++     * never fired, spawnSync received a bare name with `shell:false`, and Windows CreateProcess —
++     * which does NOT apply PATHEXT — failed ENOENT for every npm-installed reviewer CLI. The lane
++     * then wrote its `stub-with-stderr` artifact, so `ok:true, stubbed:true` read identically to
++     * "the reviewer ran cleanly with nothing to report" and the outage was invisible.
++     *
++     * Deliberate details:
++     *   - PATHEXT order, directory-major — exactly cmd.exe's own search order.
++     *   - The extensionless sibling npm drops next to the shim (a POSIX sh script for Git Bash) is
++     *     NOT a candidate: CreateProcess cannot run it either, so preferring it — as a naive first
++     *     line of `where` would — reintroduces the same ENOENT.
++     *   - An unresolvable name falls through UNCHANGED, preserving Node's own lookup and today's
++     *     error surface rather than replacing it with a new failure mode.
++     *   - `.exe` still stays OUT of the cmd.exe gate below, per #2667: mediating a real PE through
++     *     cmd.exe breaks the timeout kill and risks cmd re-parsing an argument.
++     *   - No `shell: true` and no shell string — the resolved path is still one argv element, so no
++     *     config value is ever interpolated into a command line.
++     */
++    const resolveExecutable = (name) => {
++      if (!name || process.platform !== 'win32') return name;
++      const exts = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
++        .split(';').map((e) => e.trim()).filter(Boolean);
++      const isFile = (p) => { try { return fsx.statSync(p).isFile(); } catch { return false; } };
++      // An explicit path (absolute or relative) is not a PATH lookup: honour it as given, and only
++      // append an extension when the caller left one off and the bare path does not exist.
++      if (name.includes('/') || name.includes('\\')) {
++        if (isFile(name)) return name;
++        for (const ext of exts) if (isFile(name + ext)) return name + ext;
++        return name;
++      }
++      if (path.extname(name) && isFile(name)) return name;
++      for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
++        // A name that already carries an extension is looked up verbatim, not extended again.
++        if (path.extname(name)) {
++          const exact = path.join(dir, name);
++          if (isFile(exact)) return exact;
++          continue;
++        }
++        for (const ext of exts) {
++          const candidate = path.join(dir, name + ext);
++          if (isFile(candidate)) return candidate;
++        }
++      }
++      return name;
++    };
++
+     // EVERY spawn bounded — `DEFECT.UNBOUNDED-SUBPROCESS` (CONTEXT.md:772). A frozen sync spawn
+     // cannot be interrupted by --test-force-exit and hangs a whole CI chunk to its 10-minute kill.
+     const deps = {
+@@ -1386,9 +1437,11 @@
+         // gate used in runWithTimeout: detect .cmd/.bat and mediate through
+         // cmd.exe /d /s /c with an explicit argv array (no shell:true).
+         const isWin = process.platform === 'win32';
+-        const winShim = isWin && /\.(cmd|bat)$/i.test(path.basename(binary));
+-        const spawnBinary = winShim ? (process.env.ComSpec || 'cmd.exe') : binary;
+-        const spawnArgv = winShim ? ['/d', '/s', '/c', binary, ...argv] : argv;
++        // #3086 follow-up: resolve FIRST — the gate below is meaningless against a bare name.
++        const resolvedBinary = isWin ? resolveExecutable(binary) : binary;
++        const winShim = isWin && /\.(cmd|bat)$/i.test(path.basename(resolvedBinary));
++        const spawnBinary = winShim ? (process.env.ComSpec || 'cmd.exe') : resolvedBinary;
++        const spawnArgv = winShim ? ['/d', '/s', '/c', resolvedBinary, ...argv] : argv;
+         const r = cp.spawnSync(spawnBinary, spawnArgv, {
+           input: opts.input,
+           encoding: 'utf8',

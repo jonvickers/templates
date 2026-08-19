@@ -589,12 +589,13 @@ baseline drifted and three-way merges will be unreliable — report it.
 **No `gsd-local-patches/` directory at all is the healthy state.** Say so
 plainly rather than omitting the section.
 
-### 4.1 The patch we carry on purpose
+### 4.1 The patches we carry on purpose
 
-One fix is carried deliberately, and every `/gsd-update` reverts it. It is an
-in-place edit, so it leaves nothing in `gsd-local-patches/` — "no directory is
-the healthy state" still holds above, and is precisely why this one has to be
-checked on its own:
+Two fixes are carried deliberately, and every `/gsd-update` reverts them. Both
+are in-place edits, so they leave nothing in `gsd-local-patches/` — "no directory
+is the healthy state" still holds above, and is precisely why these have to be
+checked on their own. Both are the same failure wearing different clothes: **a
+review that did not happen, reported as a review with no concerns.**
 
 - **Windows shim resolution** (`open-gsd/gsd-core` #3086, still present in
   1.10.0, the current `latest` — so upgrading is not the fix). `review-lane
@@ -607,6 +608,19 @@ checked on its own:
   Claude-driven review therefore reaches **zero** working reviewers, and each
   dead lane writes a stub that reads exactly like a reviewer with no concerns.
 
+- **Per-lane prompt cap** (unfiled upstream). Every CLI lane declares
+  `promptBudgetKey: null`, so `review-lane plan` reports `promptBudget: null` and
+  **no size limit is applied to a review prompt at all**. A review prompt on a
+  mature repo runs to hundreds of KB. Past the model's context window nothing
+  errors — the model compacts and answers confidently about material it never
+  read. The patch derives a ceiling from each lane's pinned model (window read
+  from the models.dev catalog opencode caches, never hard-coded) and **refuses**
+  over it rather than trimming: GSD's trimmer would swap a silent overflow for a
+  silent truncation, and its own disclosure note tells the model to treat missing
+  context as out of scope. An unpinned lane reports `promptCap: null` with the
+  reason rather than being given an invented number. Overridable per lane with
+  `review.max_prompt_tokens_per_reviewer.<slug>` (`0` disables it).
+
 ```bash
 node <templates>/tools/gsd-patch-check.js         # every install, exit 1 if a patch is missing
 node <templates>/tools/gsd-patch-check.js --fix   # reapply, verify, self-revert if it breaks
@@ -615,9 +629,14 @@ node <templates>/tools/gsd-patch-check.js --fix   # reapply, verify, self-revert
 It checks **every** config directory rather than the one you happen to be
 driving. `~/.claude/gsd-core` and `~/.codex/gsd-core` are independent installs,
 and the Codex one stayed broken after the Claude one was fixed by hand. It also
-recognises the fix by shape, not by our own marker, so an upstream fix reads as
-patched and is left alone rather than overwritten (the retirement question in §4
-above, answered mechanically).
+recognises each fix by shape, not by our own marker, so an upstream fix — or a
+hand-written one — reads as patched and is left alone rather than overwritten
+(the retirement question in §4 above, answered mechanically).
+
+The shim fix is prepared for upstream in `tools/gsd-patches/` — a minimal patch
+against pristine 1.10.0 plus an issue body. Filing it is how a carried patch
+eventually stops being carried; check whether it has been filed before adding a
+third.
 
 Static only: a patched runtime with a logged-out CLI behind it is still a dead
 reviewer. §7's live lane probe is the other half, and neither substitutes for the
@@ -747,8 +766,14 @@ they actually do.
   node <templates>/tools/review-lane-check.js --json   # machine-readable
   ```
 
-  It sends each lane a one-token prompt and checks the reply, printing the
-  failing lane's own error plus what to do about it.
+  It sends each lane a one-token prompt **through GSD's own `review-lane invoke`**
+  and checks the reply, printing the failing lane's own error plus what to do
+  about it. Running it through GSD rather than spawning the CLIs itself is the
+  whole point: an earlier version spawned them with `shell: true`, which resolved
+  the Windows `.cmd` shims that GSD's `shell: false` could not — so it reported
+  green through a total outage of every lane. A probe that does not reproduce the
+  real path proves nothing, so a missing GSD install is a FAIL here, never a skip.
+  `--tools <path>` points it at a specific install to compare two.
 
   **Every lane down at once is a patch problem, not a login problem.** On Windows
   GSD's own runner cannot start the reviewer CLIs without the local patch in

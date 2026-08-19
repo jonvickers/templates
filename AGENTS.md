@@ -37,22 +37,34 @@ clean — machine-scope checks belong in `ai-setup-audit.md`, repo-scope rules i
 Not synced anywhere; run them from this clone or copy one into a repo.
 
 - `review-lane-check.js` — probes all four cross-AI review lanes (claude, codex,
-  gemini, opencode) with a one-token prompt and fails if any doesn't reply, then
-  checks that the opencode lane is pinned to the newest Grok. Presence on `PATH`
-  is not the check: a logged-out CLI, or a repo `.env` shadowing
-  `~/.gemini/.env`, silently costs a reviewer on a review that still reports
-  success — and a stale Grok pin still replies, so it looks like a pass. "Newest"
-  is derived from the release dates in opencode's cached models.dev catalog, not
-  hard-coded, so it survives the next xAI release; `--fix` rewrites the one file
-  that holds it. **Run it inside a repo** — the gemini failure is repo-scoped.
+  gemini, opencode) with a one-token prompt **driven through GSD's own
+  `review-lane invoke`**, and fails if any doesn't reply, then checks that the
+  opencode lane is pinned to the newest Grok. It routes through GSD rather than
+  spawning the CLIs itself because an earlier version did the latter with
+  `shell: true` — which resolved the Windows `.cmd` shims GSD's `shell: false`
+  could not — and reported green through a total outage of every lane. It also
+  treats GSD's `stubbed: true` as a failure, which GSD itself reports alongside
+  `ok: true`. Presence on `PATH` is not the check: a logged-out CLI, or a repo
+  `.env` shadowing `~/.gemini/.env`, silently costs a reviewer on a review that
+  still reports success — and a stale Grok pin still replies, so it looks like a
+  pass. "Newest" is derived from the release dates in opencode's cached models.dev
+  catalog, not hard-coded, so it survives the next xAI release; `--fix` rewrites
+  the one file that holds it. **Run it inside a repo** — the gemini failure is
+  repo-scoped. `--tools <path>` probes a specific GSD install.
 - `gsd-patch-check.js` — checks every GSD install on the machine for the local
-  runtime patches we carry, and reapplies them with `--fix`. Today that is the
-  Windows shim fix (`open-gsd/gsd-core` #3086): without it GSD's own runner
-  cannot start an npm `.cmd` shim, so every reviewer lane but `claude` dies with
-  `ENOENT` — and `claude` is the lane the host skips. **Every `/gsd-update`
-  reverts it**, in all repos at once, which is the whole reason this file exists.
-  It reads the fix by shape rather than by our marker, so an upstream fix is left
-  alone. Static half only — pair it with `review-lane-check.js`.
+  runtime patches we carry, and reapplies them with `--fix`. Two today, both the
+  same failure in different clothes — a review that did not happen, reported as a
+  review with no concerns. The **Windows shim** fix (`open-gsd/gsd-core` #3086):
+  without it GSD's own runner cannot start an npm `.cmd` shim, so every reviewer
+  lane but `claude` dies with `ENOENT` — and `claude` is the lane the host skips.
+  The **prompt cap**: every CLI lane ships with no prompt size limit at all, and
+  past the model's context window nothing errors — the model compacts and answers
+  confidently about material it never read. **Every `/gsd-update` reverts both**,
+  in all repos at once, which is the whole reason this file exists. It reads each
+  fix by shape rather than by our marker, so an upstream fix is left alone. Static
+  half only — pair it with `review-lane-check.js`.
+- `gsd-patches/` — the upstream submission for the shim fix: a minimal patch
+  against pristine 1.10.0 plus an issue body. Not filed yet.
 - `wave-width-check.js` — turns the wave-topology targets in `gsd-settings.md`
   §2.3 into an exit code. Run before dispatching a phase.
 

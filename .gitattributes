@@ -1,0 +1,2 @@
+# Patch files must keep LF endings or `git apply` fails against LF sources upstream.
+*.patch -text

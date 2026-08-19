@@ -20,6 +20,33 @@
  *
  * This sends each lane a trivial prompt and checks for a sentinel in the reply.
  *
+ * THE PROBE RUNS THROUGH GSD'S OWN RUNNER — `gsd-tools review-lane invoke` —
+ * and not through a spawn of this script's own. That is the whole point, and it
+ * is not negotiable: this script must fail whenever GSD fails, and every version
+ * that reimplemented the invocation eventually diverged from it and reported
+ * green through a real outage.
+ *
+ * It has already happened once, and expensively. This script used to spawn each
+ * CLI itself with `shell: true`; GSD spawns with `shell: false` and an argv
+ * array. On Windows the reviewer CLIs are `.cmd` shims, which `cmd.exe` resolves
+ * via PATHEXT and `CreateProcess` does not — so every GSD reviewer lane died
+ * with ENOENT and wrote its "returned no assistant text" stub, which reads
+ * exactly like a reviewer with no concerns. This check passed throughout,
+ * because a shell had resolved the shim for it. Two convergence cycles came back
+ * with fabricated results.
+ *
+ * So: no argv table here, no spawn options here, no model flags here. The lane
+ * definitions live in GSD (`bin/lib/review-lane-descriptor.cjs`) and this script
+ * asks GSD to run them. A lane's pinned model, its stdin-vs-argv prompt channel,
+ * its output channel, its handler and its timeout floor all come from there. If
+ * GSD cannot be found, that is a FAILURE and not a skip — a probe that cannot
+ * reproduce the real path proves nothing at all.
+ *
+ * NOT A DEFECT — do not "fix" it: ANSI escapes do not reach the sentinel match.
+ * Measured 2026-08-19, piped stdout from all three lanes was byte-exactly
+ * "LANECHECK7Q\n" (`od -c`). The banner and colour are terminal-only. Adding an
+ * escape stripper would be dead code hiding a future real defect.
+ *
  * It then checks the OPENCODE MODEL PINS, because "the lane replied" and "the
  * lane is a strong reviewer" are different facts. The opencode lane is our Grok
  * seat, and a reply proves neither which Grok answered nor at what reasoning
@@ -36,6 +63,11 @@
  *   node tools/review-lane-check.js --models-only  # skip the live probes
  *   node tools/review-lane-check.js --skip-models  # probes only, as before
  *   node tools/review-lane-check.js --fix          # rewrite a stale machine default
+ *   node tools/review-lane-check.js --tools <path> # probe a specific gsd-tools.cjs
+ *
+ * `--tools` exists so the check can be pointed at a pristine or patched GSD and
+ * shown to go red and green accordingly. A health check nobody has watched fail
+ * is a health check nobody should trust.
  *
  * Run it from INSIDE a repo you care about, not just from home: the gemini
  * failure above is repo-dependent and a probe run from home will pass while
@@ -49,48 +81,38 @@
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 
 const SENTINEL = 'LANECHECK7Q';
 const PROMPT = `Reply with exactly this token and nothing else: ${SENTINEL}`;
 
-// The four lanes of gsd-settings.md §7.2, with the invocation each one needs.
-// `stdin: true` means the prompt goes on stdin rather than in argv.
+// The four lanes of gsd-settings.md §7.2. NO invocation detail lives here — GSD's
+// lane descriptor owns the binary, argv template, prompt channel, output channel,
+// model flag and timeout floor, and this script drives it through
+// `review-lane invoke`. All that remains per lane is what GSD cannot tell you:
+// what a human should DO when it fails.
 const LANES = {
   claude: {
-    cmd: 'claude',
-    args: ['-p', PROMPT, '--model', 'sonnet'],
     hint: 'run `claude` once interactively and sign in',
   },
   codex: {
-    cmd: 'codex',
-    args: [
-      'exec',
-      '--ephemeral',
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--skip-git-repo-check',
-      '-c',
-      'model_reasoning_effort="low"',
-      '-',
-    ],
-    stdin: true,
     hint: 'run `codex` once interactively and sign in',
   },
   gemini: {
-    cmd: 'gemini',
-    args: ['-p', PROMPT],
     hint:
       'ProjectIdRequiredError here means a repo .env is shadowing ~/.gemini/.env — ' +
       'add .gemini/.env in this repo (project id is in global-machine.md) and gitignore that file alone',
   },
   opencode: {
-    cmd: 'opencode',
-    args: ['run', PROMPT],
     hint: 'install with `npm i -g opencode-ai`; it works with no credentials on its free hosted models',
   },
 };
 
 function parseArgs(argv) {
-  const opts = { json: false, timeout: 120, lanes: Object.keys(LANES), probes: true, models: true, fix: false };
+  const opts = {
+    json: false, timeout: 120, lanes: Object.keys(LANES),
+    probes: true, models: true, fix: false, tools: null,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json') opts.json = true;
@@ -99,6 +121,7 @@ function parseArgs(argv) {
     else if (a === '--skip-models') opts.models = false;
     else if (a === '--models-only') opts.probes = false;
     else if (a === '--fix') opts.fix = true;
+    else if (a === '--tools') opts.tools = argv[++i];
     else if (a === '-h' || a === '--help') opts.help = true;
     else {
       console.error(`unknown argument: ${a}`);
@@ -117,83 +140,129 @@ function parseArgs(argv) {
   return opts;
 }
 
-function onPath(cmd) {
-  // `command -v` equivalent that also finds Windows .cmd/.ps1 shims.
-  const probe = process.platform === 'win32'
-    ? spawnSync('where', [cmd], { encoding: 'utf8' })
-    : spawnSync('command', ['-v', cmd], { encoding: 'utf8', shell: true });
-  return probe.status === 0;
+/**
+ * Ask GSD to plan a lane, so the probe can report which model will answer.
+ *
+ * Purely informational — a failure here never fails the lane. `promptCap` and
+ * `promptCapReason` are present only on a GSD carrying the per-lane prompt-cap
+ * patch; absent, the lane is simply uncapped and the field is omitted.
+ */
+function lanePlan(tools, cwd, slug, runDir) {
+  const res = spawnSync(
+    process.execPath,
+    [tools, 'review-lane', 'plan', '--selected', slug, '--run-dir', runDir,
+      '--repo-root', cwd, '--json'],
+    { cwd, encoding: 'utf8', timeout: 60000, windowsHide: true },
+  );
+  try {
+    const rows = JSON.parse(res.stdout);
+    return (Array.isArray(rows) ? rows : [rows]).find((r) => r && r.slug === slug) || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Windows needs shell:true (claude/codex/gemini/opencode are .cmd/.ps1 shims),
- * but Node's shell:true joins argv with plain spaces and quotes NOTHING — so any
- * argument containing a space arrives as several arguments. That silently
- * shredded the probe prompt and made two working lanes look broken. Quote every
- * argument ourselves and hand the shell one finished command line.
+ * Probe one lane THROUGH `gsd-tools review-lane invoke`.
+ *
+ * Three properties this buys that a local spawn cannot:
+ *   - it exercises GSD's real binary resolution, argv template and spawn options,
+ *     so a defect in any of them fails here too;
+ *   - it uses the model pinned in `review.models.<slug>`, resolved by GSD, so the
+ *     probe answers with the reviewer that would actually review;
+ *   - it distinguishes a REPLY from a STUB. GSD writes a diagnostic stub when a
+ *     lane fails or returns nothing, and reports it as `stubbed: true` while
+ *     `ok` stays true — a stub is a dropped reviewer, so this treats
+ *     `stubbed: true` as a failure no matter what `ok` says.
  */
-function shellCommandLine(cmd, args) {
-  const quote = (a) => (/[\s"&|<>^()]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a);
-  return [cmd, ...args].map(quote).join(' ');
-}
-
-function probe(name, timeoutSec) {
+function probe(name, timeoutSec, cwd, tools) {
   const lane = LANES[name];
   const started = Date.now();
+  const fail = (reason, detail) => ({
+    lane: name, ok: false, reason, detail, ms: Date.now() - started,
+  });
 
-  if (!onPath(lane.cmd)) {
-    return { lane: name, ok: false, reason: 'not installed', detail: lane.hint, ms: 0 };
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), `lanecheck-${name}-`));
+  try {
+    // GSD reads the prompt from `<run-dir>/gsd-review-prompt.md`; ask it where
+    // rather than assuming, so a future rename cannot make this silently pass.
+    const plan = lanePlan(tools, cwd, name, runDir);
+    const promptPath = (plan && plan.promptPath) || path.join(runDir, 'gsd-review-prompt.md');
+    fs.writeFileSync(promptPath, `${PROMPT}\n`);
+
+    const res = spawnSync(
+      process.execPath,
+      [tools, 'review-lane', 'invoke', '--slug', name, '--selected', name,
+        '--run-dir', runDir, '--repo-root', cwd, '--explicit', '--json'],
+      { cwd, encoding: 'utf8', timeout: timeoutSec * 1000, windowsHide: true,
+        maxBuffer: 16 * 1024 * 1024 },
+    );
+
+    const ms = Date.now() - started;
+    const model = plan && plan.promptCapReason
+      ? (String(plan.promptCapReason).match(/derived \(([^\s—:]+)/) || [])[1] || null
+      : null;
+
+    if (res.error && res.error.code === 'ETIMEDOUT') {
+      return {
+        ...fail(`no reply within ${timeoutSec}s`,
+          'a real review needs ≥1800s, but a one-token prompt should not — treat this as a stuck lane'),
+        model,
+      };
+    }
+    if (res.error) {
+      return { ...fail('gsd-tools failed to launch', String(res.error.message)), model };
+    }
+
+    let result = null;
+    try { result = JSON.parse(res.stdout); } catch { /* handled below */ }
+    const stderrTail = String(res.stderr || '').split(/\r?\n/)
+      .map((l) => l.trim()).filter(Boolean).slice(-1)[0] || '';
+    if (!result) {
+      return {
+        ...fail(`gsd-tools exit ${res.status}, unparseable result`,
+          `${stderrTail.slice(0, 300) || '(no output)'}  ·  ${lane.hint}`),
+        model,
+      };
+    }
+
+    // A stub IS the outage. GSD reports ok:true, stubbed:true for a lane that
+    // failed to launch or returned nothing — indistinguishable downstream from a
+    // reviewer with no concerns, which is precisely why this must be red here.
+    if (result.stubbed || result.ok === false) {
+      const errFile = path.join(runDir, `gsd-review-${name}.err`);
+      const captured = fs.existsSync(errFile) ? fs.readFileSync(errFile, 'utf8') : '';
+      const line = `${result.detail || ''} ${captured} ${stderrTail}`
+        .split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+        .find((l) => /error|denied|unauthor|forbidden|not logged|sign in|credential|quota|ProjectId|ENOENT|EINVAL/i.test(l))
+        || String(result.detail || captured || stderrTail || '(no diagnostic)').trim();
+      return {
+        ...fail(
+          result.ok === false ? `lane refused: ${result.reason || 'unknown'}` : 'lane returned a STUB, not a review',
+          `${line.slice(0, 300)}${line.length > 300 ? '…' : ''}  ·  ${lane.hint}`),
+        model,
+      };
+    }
+
+    // The lane claims a real reply — confirm the sentinel actually survived to
+    // the artifact the review pipeline would read.
+    const reviewFile = path.join(runDir, `gsd-review-${name}.md`);
+    const body = fs.existsSync(reviewFile) ? fs.readFileSync(reviewFile, 'utf8') : '';
+    if (!body.includes(SENTINEL)) {
+      const first = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0] || '(empty review file)';
+      return {
+        ...fail('replied, but no sentinel in the review artifact',
+          `${first.slice(0, 300)}  ·  ${lane.hint}`),
+        model,
+      };
+    }
+
+    return { lane: name, ok: true, reason: 'replied', ms, model };
+  } catch (e) {
+    return fail('probe error', String((e && e.message) || e));
+  } finally {
+    try { fs.rmSync(runDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
-
-  const useShell = process.platform === 'win32';
-  const res = useShell
-    ? spawnSync(shellCommandLine(lane.cmd, lane.args), {
-        input: lane.stdin ? PROMPT : undefined,
-        encoding: 'utf8',
-        timeout: timeoutSec * 1000,
-        shell: true,
-        windowsHide: true,
-      })
-    : spawnSync(lane.cmd, lane.args, {
-        input: lane.stdin ? PROMPT : undefined,
-        encoding: 'utf8',
-        timeout: timeoutSec * 1000,
-        windowsHide: true,
-      });
-
-  const ms = Date.now() - started;
-  const out = `${res.stdout || ''}\n${res.stderr || ''}`;
-
-  if (res.error && res.error.code === 'ETIMEDOUT') {
-    return {
-      lane: name,
-      ok: false,
-      reason: `no reply within ${timeoutSec}s`,
-      detail: 'a real review needs ≥1800s, but a one-token prompt should not — treat this as a stuck lane',
-      ms,
-    };
-  }
-  if (res.error) {
-    return { lane: name, ok: false, reason: 'failed to launch', detail: String(res.error.message), ms };
-  }
-  if (out.includes(SENTINEL)) {
-    return { lane: name, ok: true, reason: 'replied', ms };
-  }
-
-  // Surface the most informative line rather than a wall of output.
-  const firstError =
-    out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-      .find((l) => /error|denied|unauthor|forbidden|not logged|sign in|credential|quota|ProjectId/i.test(l)) ||
-    out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-1)[0] ||
-    '(no output)';
-
-  return {
-    lane: name,
-    ok: false,
-    reason: `exit ${res.status}, no sentinel in reply`,
-    detail: `${firstError.slice(0, 300)}${firstError.length > 300 ? '…' : ''}  ·  ${lane.hint}`,
-    ms,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -461,18 +530,36 @@ function main() {
   const inRepo = fs.existsSync(path.join(cwd, '.git'));
   const shadowingEnv = fs.existsSync(path.join(cwd, '.env')) && !fs.existsSync(path.join(cwd, '.gemini', '.env'));
 
+  // The probe runs through GSD's runner, so no GSD means no probe. That is a
+  // FAILURE, never a skip: the whole value of this script is that it fails
+  // wherever GSD fails, and a green "couldn't check" is the exact shape of the
+  // outage it exists to catch.
+  const tools = opts.tools || findGsdTools(cwd);
+  const toolsMissing = opts.probes && (!tools || !fs.existsSync(tools));
+
   if (!opts.json) {
     console.log(`review lanes — probing from ${cwd}`);
+    if (tools && !toolsMissing) console.log(`  through ${tools}`);
     if (!inRepo) console.log('  note: not a git repo. The gemini lane fails repo-by-repo — probe inside each repo too.');
     if (shadowingEnv) console.log('  note: this repo has a root .env and no .gemini/.env — expect the gemini lane to fail here.');
     console.log('');
   }
 
   const results = !opts.probes ? [] : opts.lanes.map((l) => {
-    const r = probe(l, opts.timeout);
+    const r = toolsMissing
+      ? {
+          lane: l,
+          ok: false,
+          reason: 'cannot probe — no gsd-tools found',
+          detail: `${opts.tools ? `--tools ${opts.tools} does not exist` : 'no GSD install under ~/.claude, ~/.codex or this repo'}` +
+            ' — this check runs lanes through GSD\'s own runner and will not fake a pass without it',
+          ms: 0,
+        }
+      : probe(l, opts.timeout, cwd, tools);
     if (!opts.json) {
       const mark = r.ok ? 'ok  ' : 'FAIL';
-      console.log(`  ${mark} ${r.lane.padEnd(9)} ${r.reason}${r.ok ? ` (${(r.ms / 1000).toFixed(1)}s)` : ''}`);
+      const via = r.model ? ` [${r.model}]` : '';
+      console.log(`  ${mark} ${r.lane.padEnd(9)} ${r.reason}${r.ok ? ` (${(r.ms / 1000).toFixed(1)}s)` : ''}${via}`);
       if (!r.ok && r.detail) console.log(`       ${r.detail}`);
     }
     return r;
@@ -491,7 +578,7 @@ function main() {
   const failed = [...results, ...models].filter((r) => !r.ok);
 
   if (opts.json) {
-    console.log(JSON.stringify({ cwd, in_repo: inRepo, results, models, failed: failed.length }, null, 2));
+    console.log(JSON.stringify({ cwd, in_repo: inRepo, gsd_tools: tools || null, results, models, failed: failed.length }, null, 2));
   } else {
     console.log('');
     const laneFails = results.filter((r) => !r.ok);
