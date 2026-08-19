@@ -116,10 +116,12 @@ function main() {
   }
 
   if (repaired.length > 0) {
+    // Name the patches rather than describing their effect: the set varies (an update may revert
+    // one, both, or — once upstream owns a fix — none), and a fixed sentence would be wrong for
+    // every case but the one it was written for.
     pass(
-      `review-patch-guard: reapplied ${repaired.length} GSD runtime patch(es) reverted by an update ` +
-      `(${[...new Set(repaired.map((i) => i.patch))].join(', ')}). Reviewers can spawn again; ` +
-      'the review proceeds.',
+      `review-patch-guard: reapplied ${repaired.length} GSD runtime patch(es) an update had reverted ` +
+      `(${[...new Set(repaired.map((i) => i.patch))].join(', ')}). The review proceeds.`,
     );
   }
 

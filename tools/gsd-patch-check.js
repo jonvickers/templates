@@ -101,6 +101,21 @@ const SPAWN_ARGV_LINE = /^(\s*)const spawnArgv = winShim \? \['\/d', '\/s', '\/c
 const BASENAME_TEST = /const winShim = isWin && \/\\\.\(cmd\|bat\)\$\/i\.test\(path\.basename\((\w+)\)\);/;
 const IS_WIN_LINE = /^\s*const isWin = process\.platform === 'win32';$/;
 
+// ── The upstream fix, which landed in 1.11.0 ───────────────────────────────────────────────
+//
+// #3275 (the reviewer-lane symptom) and epic #3411 (four divergent Windows binary resolvers, one
+// of them ours) closed by moving resolution into `shell-command-projection`'s
+// `projectSpawnInvocation`, which resolve-then-mediates in a single seam call. That rewrote the
+// spawn site wholesale: `winShim`, `spawnBinary` and `spawnArgv` are no longer computed here at
+// all, so the shape detection above finds nothing and — without this — reports `unknown`, which
+// reads as "verify by hand" and, through `review-patch-guard.js`, BLOCKS every review on a
+// correctly-fixed runtime. An upstream fix must be recognised as a fix, not as damage.
+//
+// Matched inside the `spawn:` dep specifically. `projectSpawnInvocation` is the shared seam and
+// has other callers; finding it somewhere else in the file says nothing about the review lane.
+const SPAWN_DEP_OPEN = /^\s*spawn: \(binary, argv, opts\) => \{$/;
+const SEAM_CALL = /projectSpawnInvocation\(binary, argv\)/;
+
 /**
  * The resolver we inject. Deliberately self-contained — it requires its own fs/path rather than
  * closing over gsd-tools' module-local bindings, so an upstream rename cannot silently break it.
@@ -145,6 +160,18 @@ function resolverSource(indent) {
 /** @returns {{status:'patched'|'unpatched'|'unknown', detail:string}} plus locations when found. */
 function inspectWindowsShim(source) {
   const lines = source.split('\n');
+
+  // Upstream first: a runtime that already resolves through the seam needs nothing from us, and
+  // must not be reported as broken merely because it no longer looks like the code we patched.
+  const depOpen = lines.findIndex((l) => SPAWN_DEP_OPEN.test(l));
+  if (depOpen !== -1 && lines.slice(depOpen, depOpen + 40).some((l) => SEAM_CALL.test(l))) {
+    return {
+      status: 'patched',
+      detail: 'upstream (#3275 / #3411, 1.11.0) resolves through the shared PATH+PATHEXT seam — our patch is retired here',
+      upstream: true,
+    };
+  }
+
   const idx = lines.findIndex((l) => SPAWN_ARGV_LINE.test(l));
   if (idx === -1) {
     return {

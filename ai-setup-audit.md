@@ -591,22 +591,32 @@ plainly rather than omitting the section.
 
 ### 4.1 The patches we carry on purpose
 
-Two fixes are carried deliberately, and every `/gsd-update` reverts them. Both
+Two fixes are carried deliberately, and every `/gsd-update` reverts them — one
+of them only until you take 1.11.0, which fixes it upstream. Both
 are in-place edits, so they leave nothing in `gsd-local-patches/` — "no directory
 is the healthy state" still holds above, and is precisely why these have to be
 checked on their own. Both are the same failure wearing different clothes: **a
 review that did not happen, reported as a review with no concerns.**
 
-- **Windows shim resolution** (`open-gsd/gsd-core` #3086, still present in
-  1.10.0, the current `latest` — so upgrading is not the fix). `review-lane
-  invoke` spawns each reviewer with `shell:false`, then decides whether to
-  mediate through `cmd.exe` by testing whether the *configured* binary name ends
-  in `.cmd`. Every lane configures a bare name, so the test never fires, and
-  Windows cannot start the `.cmd` shims npm installs — every lane dies instantly
-  with `ENOENT`. `claude` survives only because it installs as a real `.exe`, and
-  `claude` is the one lane GSD skips when Claude Code is the host: a
-  Claude-driven review therefore reaches **zero** working reviewers, and each
-  dead lane writes a stub that reads exactly like a reviewer with no concerns.
+- **Windows shim resolution** (`open-gsd/gsd-core` #3086 — **fixed upstream in
+  1.11.0; carried only on 1.10.0 and older**). `review-lane invoke` spawns each
+  reviewer with `shell:false`, then decides whether to mediate through `cmd.exe`
+  by testing whether the *configured* binary name ends in `.cmd`. Every lane
+  configures a bare name, so the test never fires, and Windows cannot start the
+  `.cmd` shims npm installs — every lane dies instantly with `ENOENT`. `claude`
+  survives only because it installs as a real `.exe`, and `claude` is the one
+  lane GSD skips when Claude Code is the host: a Claude-driven review therefore
+  reaches **zero** working reviewers, and each dead lane writes a stub that reads
+  exactly like a reviewer with no concerns.
+
+  1.11.0 closed it (#3275 for the symptom, epic #3411 for the cause — four
+  divergent Windows binary resolvers, one of them this patch) by routing the
+  spawn through `shell-command-projection`'s `projectSpawnInvocation`, the same
+  PATH+PATHEXT resolver `hasBinary` already used. **Upgrading is now the fix**,
+  and it is the better one: it retires a patch we would otherwise reapply after
+  every update forever. `gsd-patch-check.js` recognises the new shape as patched
+  and leaves it alone, so the upgrade needs no coordination — but until you take
+  it, the patch is still load-bearing on 1.10.0 and the check still carries it.
 
 - **Per-lane prompt cap** (unfiled upstream). Every CLI lane declares
   `promptBudgetKey: null`, so `review-lane plan` reports `promptBudget: null` and
@@ -644,10 +654,11 @@ recognises each fix by shape, not by our own marker, so an upstream fix — or a
 hand-written one — reads as patched and is left alone rather than overwritten
 (the retirement question in §4 above, answered mechanically).
 
-The shim fix is prepared for upstream in `tools/gsd-patches/` — a minimal patch
-against pristine 1.10.0 plus an issue body. Filing it is how a carried patch
-eventually stops being carried; check whether it has been filed before adding a
-third.
+`tools/gsd-patches/` holds the shim fix prepared for upstream. It was never
+filed, and no longer needs to be: 1.11.0 shipped an equivalent fix independently.
+It is kept as the worked example of how a carried patch stops being carried —
+check `tools/gsd-patches/README.md` before adding a third, and check whether the
+release you are on has already retired one.
 
 Static only: a patched runtime with a logged-out CLI behind it is still a dead
 reviewer. §7's live lane probe is the other half, and neither substitutes for the

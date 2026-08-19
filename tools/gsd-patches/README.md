@@ -10,8 +10,26 @@ a patch we have chosen to maintain forever.
 
 | File | Against | Status |
 |---|---|---|
-| `3086-resolve-windows-shim.patch` | `@opengsd/gsd-core@1.10.0`, `gsd-core/bin/gsd-tools.cjs` | **not filed** |
-| `3086-issue-body.md` | `open-gsd/gsd-core` issue #3086 | **not filed** |
+| `3086-resolve-windows-shim.patch` | `@opengsd/gsd-core@1.10.0`, `gsd-core/bin/gsd-tools.cjs` | **superseded — never filed** |
+| `3086-issue-body.md` | `open-gsd/gsd-core` issue #3086 | **superseded — never filed** |
+
+## Superseded by 1.11.0 (2026-08-19)
+
+Upstream reached the same fix without us, and a better-placed one. #3275 carried
+the reviewer-lane symptom; epic #3411 named the actual cause — **four divergent
+Windows binary resolvers, of which this patch was a fifth** — and closed it by
+routing the lane spawn through `shell-command-projection`'s
+`projectSpawnInvocation`, the PATH+PATHEXT resolver `hasBinary` already used. Both
+issues are closed COMPLETED and the fix ships in 1.11.0, the current `latest`.
+
+Do not file this. It is a duplicate of closed, released work, and #3411's seam is
+the fix worth having: ours corrected one call site, theirs gave the machine one
+owner for the question. `gsd-patch-check.js` detects the new shape and reports the
+patch retired, so upgrading is all that is required.
+
+Kept as the worked example the process is supposed to produce — and as the record
+of what "not filed yet" costs. This sat unfiled long enough for someone else to
+fix it, which is the good outcome only because the fix landed at all.
 
 ## `3086-resolve-windows-shim.patch`
 
@@ -32,7 +50,10 @@ Apply with `git apply` from a `gsd-core` checkout root.
 
 ## What is deliberately NOT here
 
-The `prompt-cap` patch. Its context-window derivation reads the models.dev catalog opencode caches
+The `prompt-cap` patch — which, unlike the shim, is **still present in 1.11.0**: every CLI lane
+declares `promptBudgetKey: null` while the three local-server lanes (`ollama`, `lm_studio`,
+`llama_cpp`) declare real keys, so the cap exists and is simply never wired to the lanes that need
+it most. Its context-window derivation reads the models.dev catalog opencode caches
 locally, which is fine for one machine and wrong as a library dependency. Upstream would also want a
 `PROMPT_EXCEEDS_CONTEXT` member in `LANE_UNAVAILABLE` (the local patch reuses the declared
 `budget_too_small` rather than extending a frozen enum). The defect is described at the end of

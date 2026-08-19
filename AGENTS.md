@@ -75,7 +75,9 @@ Not synced anywhere; run them from this clone or copy one into a repo.
   script basename it manages, so a foreign entry survives `/gsd-update`; there is
   no copy under `~/.claude/hooks/` to drift or be pruned.
 - `gsd-patches/` — the upstream submission for the shim fix: a minimal patch
-  against pristine 1.10.0 plus an issue body. Not filed yet.
+  against pristine 1.10.0 plus an issue body. **Never filed, and superseded** —
+  1.11.0 fixed it independently (#3275, epic #3411), better placed than ours. Kept
+  as the worked example, and as the record of what leaving one unfiled costs.
 - `wave-width-check.js` — turns the wave-topology targets in `gsd-settings.md`
   §2.3 into an exit code. Run before dispatching a phase.
 
