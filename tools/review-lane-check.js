@@ -20,17 +20,27 @@
  *
  * This sends each lane a trivial prompt and checks for a sentinel in the reply.
  *
+ * It then checks the OPENCODE MODEL PINS, because "the lane replied" and "the
+ * lane is a strong reviewer" are different facts. The opencode lane is our Grok
+ * seat, and a reply proves neither which Grok answered nor at what reasoning
+ * effort. Grok ships a new version every few weeks, so a pin written once is a
+ * silent downgrade a month later — the check therefore derives the expected
+ * model from opencode's own catalog rather than hard-coding a version.
+ * gsd-settings.md §7.3 is canonical for all of it.
+ *
  * Usage:
  *   node tools/review-lane-check.js              # probe from the current directory
  *   node tools/review-lane-check.js --json       # machine-readable
  *   node tools/review-lane-check.js --timeout 90 # seconds per lane (default 120)
  *   node tools/review-lane-check.js --lane gemini,codex
+ *   node tools/review-lane-check.js --models-only  # skip the live probes
+ *   node tools/review-lane-check.js --skip-models  # probes only, as before
  *
  * Run it from INSIDE a repo you care about, not just from home: the gemini
  * failure above is repo-dependent and a probe run from home will pass while
  * every review in that repo drops the lane.
  *
- * Exit codes: 0 all probed lanes replied · 1 at least one failed · 2 bad usage.
+ * Exit codes: 0 everything checked passed · 1 something failed · 2 bad usage.
  */
 
 'use strict';
@@ -79,12 +89,14 @@ const LANES = {
 };
 
 function parseArgs(argv) {
-  const opts = { json: false, timeout: 120, lanes: Object.keys(LANES) };
+  const opts = { json: false, timeout: 120, lanes: Object.keys(LANES), probes: true, models: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json') opts.json = true;
     else if (a === '--timeout') opts.timeout = Number(argv[++i]);
     else if (a === '--lane') opts.lanes = String(argv[++i]).split(',').map((s) => s.trim());
+    else if (a === '--skip-models') opts.models = false;
+    else if (a === '--models-only') opts.probes = false;
     else if (a === '-h' || a === '--help') opts.help = true;
     else {
       console.error(`unknown argument: ${a}`);
@@ -182,6 +194,224 @@ function probe(name, timeoutSec) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Model pins — is the opencode lane actually the latest Grok, and at what effort
+// ---------------------------------------------------------------------------
+
+const HOME = process.env.HOME || process.env.USERPROFILE || '';
+
+function readJsonish(file) {
+  // opencode accepts .jsonc. Strip // and /* */ comments and trailing commas so
+  // a commented config does not read as "no model configured".
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    const stripped = raw
+      .replace(/("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (m, str) => str || '')
+      .replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(stripped);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The newest Grok, read from the models.dev catalog opencode caches locally.
+ *
+ * Deriving this beats a hard-coded constant: a constant is right the day it is
+ * written and a silent downgrade the day xAI ships the next one. The catalog
+ * carries `release_date`, so "latest" is a fact we can look up.
+ *
+ * Only plain `grok-<n>[.<n>]` ids are eligible. xAI also publishes dated
+ * snapshots (`grok-4.20-0309-reasoning`), image models, and `grok-build-*`;
+ * ranking those by date would eventually hand the reviewer seat to a snapshot
+ * or a non-chat model. The excluded ids are reported rather than dropped
+ * silently, so a genuinely new naming scheme shows up as something to look at.
+ */
+function latestGrok() {
+  const cachePaths = [
+    process.env.XDG_CACHE_HOME && path.join(process.env.XDG_CACHE_HOME, 'opencode', 'models.json'),
+    HOME && path.join(HOME, '.cache', 'opencode', 'models.json'),
+  ].filter(Boolean);
+
+  const file = cachePaths.find((p) => fs.existsSync(p));
+  if (!file) {
+    return { error: `no opencode model catalog at ${cachePaths.join(' or ')} — run \`opencode models\` once to populate it` };
+  }
+
+  const catalog = readJsonish(file);
+  const models = catalog && catalog.xai && catalog.xai.models;
+  if (!models) return { error: `${file} has no xai.models section` };
+
+  const eligible = [];
+  const skipped = [];
+  for (const [id, meta] of Object.entries(models)) {
+    if (/^grok-\d+(\.\d+)?$/.test(id) && meta && meta.reasoning) eligible.push({ id, release: meta.release_date || '' });
+    else if (/^grok-/.test(id)) skipped.push(id);
+  }
+  if (!eligible.length) return { error: `no plain grok-<version> reasoning model in ${file}` };
+
+  eligible.sort((a, b) => (a.release < b.release ? 1 : a.release > b.release ? -1 : a.id < b.id ? 1 : -1));
+  const ageDays = Math.floor((Date.now() - fs.statSync(file).mtimeMs) / 86400000);
+  return { model: `xai/${eligible[0].id}`, release: eligible[0].release, file, ageDays, skipped, all: eligible };
+}
+
+/** Every opencode config that could set a default model, and what each one says. */
+function opencodeDefaults() {
+  const dirs = [
+    process.env.XDG_CONFIG_HOME && path.join(process.env.XDG_CONFIG_HOME, 'opencode'),
+    HOME && path.join(HOME, '.config', 'opencode'),
+  ].filter(Boolean);
+
+  const files = [];
+  if (process.env.OPENCODE_CONFIG) files.push(process.env.OPENCODE_CONFIG);
+  for (const d of dirs) for (const f of ['opencode.json', 'opencode.jsonc']) files.push(path.join(d, f));
+
+  return files
+    .filter((f) => fs.existsSync(f))
+    .map((f) => ({ file: f, model: (readJsonish(f) || {}).model }));
+}
+
+/** gsd-tools, found the way GSD's own workflow shims find it. */
+function findGsdTools(cwd) {
+  const candidates = [
+    path.join(cwd, 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    path.join(cwd, '.claude', 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    process.env.CLAUDE_CONFIG_DIR && path.join(process.env.CLAUDE_CONFIG_DIR, 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    HOME && path.join(HOME, '.claude', 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    process.env.CODEX_HOME && path.join(process.env.CODEX_HOME, 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    HOME && path.join(HOME, '.codex', 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    HOME && path.join(HOME, '.gemini', 'gsd-core', 'bin', 'gsd-tools.cjs'),
+  ].filter(Boolean);
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
+/**
+ * The reasoning effort the automatic opencode lane will actually use.
+ *
+ * GSD resolves every lane's effort from ONE agent — gsd-plan-checker — and turns
+ * it into that host's argv syntax (`--variant <level>` for opencode). So this is
+ * a property of the repo's effort resolution, not of the reviewer config, and
+ * there is no per-lane knob for it.
+ */
+function laneVariant(cwd) {
+  const tools = findGsdTools(cwd);
+  if (!tools) return { skipped: 'gsd-tools not found — no GSD install to ask' };
+  const res = spawnSync(
+    process.execPath,
+    [tools, 'query', 'resolve-execution', 'gsd-plan-checker', '--host', 'opencode', '--pick', 'effort_argv_string'],
+    { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true },
+  );
+  if (res.status !== 0) return { skipped: `gsd-tools query failed: ${String(res.stderr || '').trim().slice(0, 160)}` };
+  const argv = String(res.stdout || '').trim();
+  return { argv, level: (argv.match(/--variant\s+(\S+)/) || [])[1] || null };
+}
+
+function modelChecks(cwd) {
+  const out = [];
+  const latest = latestGrok();
+
+  if (latest.error) {
+    out.push({ check: 'latest grok', ok: false, reason: 'cannot determine', detail: latest.error });
+    return out;
+  }
+
+  const notes = [];
+  if (latest.ageDays > 7) {
+    notes.push(`catalog is ${latest.ageDays} days old — run \`opencode models\` to refresh before trusting this`);
+  }
+  if (latest.skipped.length) {
+    // Named, not hidden: if xAI renames its chat line these become the thing to
+    // look at, and a silent exclusion would just look like the catalog is thin.
+    notes.push(`not eligible (snapshot / image / non-reasoning): ${latest.skipped.sort().join(', ')}`);
+  }
+  out.push({
+    check: 'latest grok',
+    ok: true,
+    reason: `${latest.model} (released ${latest.release})`,
+    detail: notes.length ? notes.join('  ·  ') : undefined,
+  });
+
+  // 1. opencode's own default. This governs the lane whenever the repo pin is
+  //    unset, and it is the value a human sees in an interactive opencode run.
+  const defaults = opencodeDefaults();
+  const declared = defaults.filter((d) => d.model);
+  if (!declared.length) {
+    out.push({
+      check: 'opencode default',
+      ok: false,
+      reason: 'no model set',
+      detail: `set "model": "${latest.model}" in ${HOME}/.config/opencode/opencode.json — without it opencode picks whatever it likes, which with an empty auth.json is a free hosted model`,
+    });
+  } else if (declared.length > 1 && new Set(declared.map((d) => d.model)).size > 1) {
+    out.push({
+      check: 'opencode default',
+      ok: false,
+      reason: 'two configs disagree',
+      detail: declared.map((d) => `${d.file} → ${d.model}`).join('  ·  '),
+    });
+  } else if (declared[0].model !== latest.model) {
+    out.push({
+      check: 'opencode default',
+      ok: false,
+      reason: `${declared[0].model}, not ${latest.model}`,
+      detail: `${declared[0].file} — a Grok version behind is a quieter downgrade than a broken lane, because the lane still replies`,
+    });
+  } else {
+    out.push({ check: 'opencode default', ok: true, reason: `${declared[0].model} (${declared[0].file})` });
+  }
+
+  // 2. The repo's own pin. Host-independent, so it is what makes the reviewer
+  //    the same model on a teammate's machine (gsd-settings.md §7.2).
+  const planningConfig = path.join(cwd, '.planning', 'config.json');
+  if (!fs.existsSync(planningConfig)) {
+    out.push({ check: 'repo pin', ok: true, reason: 'no .planning/config.json here — not a GSD repo, nothing to pin' });
+  } else {
+    const cfg = readJsonish(planningConfig) || {};
+    const pin = cfg.review && cfg.review.models ? cfg.review.models.opencode : undefined;
+    if (pin === latest.model) {
+      out.push({ check: 'repo pin', ok: true, reason: `review.models.opencode = ${pin}` });
+    } else if (pin === undefined || pin === null || pin === '') {
+      out.push({
+        check: 'repo pin',
+        ok: false,
+        reason: 'review.models.opencode unset',
+        detail: `the lane falls through to whatever this machine defaults to, so a teammate gets a different reviewer — set it to "${latest.model}"`,
+      });
+    } else {
+      out.push({
+        check: 'repo pin',
+        ok: false,
+        reason: `review.models.opencode = ${JSON.stringify(pin)}, not ${latest.model}`,
+        detail: 'gsd-tools config-set review.models.opencode ' + latest.model,
+      });
+    }
+  }
+
+  // 3. Reasoning effort. Reported, never failed: the only lever is an `effort`
+  //    block, and adding one flattens GSD's shipped per-agent tiers onto
+  //    effort.default — it drops gsd-planner from xhigh to high. Trading the
+  //    planner's effort for the reviewer's is the wrong trade, so the fix is to
+  //    run a high-effort Grok pass by hand. gsd-settings.md §5 and §7.3.
+  const variant = laneVariant(cwd);
+  if (variant.skipped) {
+    out.push({ check: 'lane effort', ok: true, reason: `not checked — ${variant.skipped}` });
+  } else if (variant.level === 'high' || variant.level === 'xhigh' || variant.level === 'max') {
+    out.push({ check: 'lane effort', ok: true, reason: `${variant.argv}` });
+  } else {
+    out.push({
+      check: 'lane effort',
+      ok: true,
+      reason: `${variant.argv || 'none'} — the automatic lane runs Grok at low reasoning`,
+      detail:
+        'expected, and not worth an `effort` block to change: any effort block flattens GSD\'s per-agent tiers ' +
+        '(gsd-planner drops xhigh→high). For a high-effort pass run it by hand: ' +
+        `opencode run --model ${latest.model} --variant high --format json - < prompt.md`,
+    });
+  }
+
+  return out;
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
@@ -200,7 +430,7 @@ function main() {
     console.log('');
   }
 
-  const results = opts.lanes.map((l) => {
+  const results = !opts.probes ? [] : opts.lanes.map((l) => {
     const r = probe(l, opts.timeout);
     if (!opts.json) {
       const mark = r.ok ? 'ok  ' : 'FAIL';
@@ -210,25 +440,44 @@ function main() {
     return r;
   });
 
-  const failed = results.filter((r) => !r.ok);
+  const models = !opts.models ? [] : modelChecks(cwd);
+  if (models.length && !opts.json) {
+    console.log('');
+    console.log('  opencode model pins — a lane that replies can still be the wrong Grok:');
+    for (const m of models) {
+      console.log(`  ${m.ok ? 'ok  ' : 'FAIL'} ${m.check.padEnd(18)} ${m.reason}`);
+      if (m.detail) console.log(`       ${m.detail}`);
+    }
+  }
+
+  const failed = [...results, ...models].filter((r) => !r.ok);
 
   if (opts.json) {
-    console.log(JSON.stringify({ cwd, in_repo: inRepo, results, failed: failed.length }, null, 2));
+    console.log(JSON.stringify({ cwd, in_repo: inRepo, results, models, failed: failed.length }, null, 2));
   } else {
     console.log('');
-    if (failed.length === 0) {
-      const complete = results.length === Object.keys(LANES).length;
-      console.log(
-        complete
-          ? `  all ${results.length} lanes replied — a review from any host gets its full three.`
-          : `  ${results.length} of ${Object.keys(LANES).length} lanes probed, all replied. ` +
-            'Run without --lane to prove the full set.'
-      );
-    } else {
-      console.log(
-        `  ${failed.length} of ${results.length} lanes broken: ${failed.map((f) => f.lane).join(', ')}.\n` +
-        '  Every review from a host other than a broken lane silently runs one reviewer short.'
-      );
+    const laneFails = results.filter((r) => !r.ok);
+    if (results.length) {
+      if (laneFails.length === 0) {
+        const complete = results.length === Object.keys(LANES).length;
+        console.log(
+          complete
+            ? `  all ${results.length} lanes replied — a review from any host gets its full three.`
+            : `  ${results.length} of ${Object.keys(LANES).length} lanes probed, all replied. ` +
+              'Run without --lane to prove the full set.'
+        );
+      } else {
+        console.log(
+          `  ${laneFails.length} of ${results.length} lanes broken: ${laneFails.map((f) => f.lane).join(', ')}.\n` +
+          '  Every review from a host other than a broken lane silently runs one reviewer short.'
+        );
+      }
+    }
+    const modelFails = models.filter((m) => !m.ok);
+    if (modelFails.length) {
+      console.log(`  ${modelFails.length} model pin problem(s): ${modelFails.map((m) => m.check).join(', ')}.`);
+    } else if (models.length) {
+      console.log('  opencode is pinned to the newest Grok everywhere it is configured.');
     }
   }
 

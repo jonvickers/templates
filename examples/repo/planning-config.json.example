@@ -105,7 +105,16 @@
       "gemini":   null,
       "claude":   "sonnet",        // fast mid-tier; only runs when the host is
                                    // NOT Claude Code
-      "opencode": "opencode/nemotron-3-ultra-free"
+
+      // This is the Grok seat. Pin the NEWEST Grok, and re-check it — xAI ships
+      // a new version every few weeks and a stale pin still replies, so the lane
+      // looks healthy while quietly reviewing with an older model. "Newest" is
+      // the highest release_date among plain grok-<version> reasoning models in
+      // ~/.cache/opencode/models.json, not the biggest-looking number (the
+      // grok-4.20-0309-* snapshots are from March). Set the same value as the
+      // machine default in ~/.config/opencode/opencode.json, and prove both with
+      // `node <templates>/tools/review-lane-check.js`.
+      "opencode": "xai/grok-4.6"
     }
   }
 }
@@ -124,11 +133,15 @@
 //                                 — and it turns an uninstalled reviewer from a
 //                                 skip into a silent pass. gsd-settings.md §7.2.
 //   effort.*                      GSD's shipped tiers (light:low, standard:high,
-//                                 heavy:xhigh) are what you want. A repo block
-//                                 replaces them wholesale and has always been a
-//                                 downgrade in practice. Note it does NOT fall
-//                                 back to your session's effort — GSD never
-//                                 reads that. gsd-settings.md §5.
+//                                 heavy:xhigh) are what you want. The KEY'S MERE
+//                                 PRESENCE replaces them: even "effort": {} drops
+//                                 gsd-planner from xhigh to high, because every
+//                                 agent without an explicit override then resolves
+//                                 to effort.default. There is no surgical edit.
+//                                 Note it does NOT fall back to your session's
+//                                 effort — GSD never reads that. gsd-settings.md §5.
+//                                 This is why a high-effort Grok review is run by
+//                                 hand (§7.3) rather than configured.
 //   workflow.auto_prune_state     prompt-before-prune is safer
 //   model_policy.*                redundant with model_profile, and creates a
 //                                 second conflicting model-selection system

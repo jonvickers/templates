@@ -717,6 +717,30 @@ they actually do.
   own `.env`. Probe at least every repo with a `.planning/` directory; the script
   warns when the current directory has a root `.env` and no `.gemini/.env`.
 
+- **The opencode lane is on the newest Grok.** A replying lane is not a healthy
+  lane: `opencode` is the Grok seat, and with no xAI credential it answers from a
+  free hosted model, while a version pin written a month ago answers from an
+  older Grok. Both look identical to a probe. The same script checks it (it runs
+  by default; `--models-only` skips the slow live probes):
+
+  ```bash
+  node <templates>/tools/review-lane-check.js --models-only
+  ```
+
+  It derives "newest Grok" from the models.dev catalog opencode caches at
+  `~/.cache/opencode/models.json` — highest `release_date` among plain
+  `grok-<version>` models with `reasoning: true` — rather than a constant, so it
+  keeps working after xAI ships the next one. Then it checks three things
+  against that answer: the machine default in
+  `~/.config/opencode/opencode.json`, the repo's `review.models.opencode`, and
+  the reasoning effort the automatic lane will use. Fix a drifted machine default
+  here; a drifted repo pin is `gsd-settings.md` §7.3's business, and §8's repo
+  sweep is where you catch it across every repo at once.
+
+  The effort line reports and never fails. The automatic lane runs Grok at
+  `--variant low` and there is no config that changes only that — see
+  `gsd-settings.md` §5. Run a high-effort pass by hand when you want one.
+
 - **No repo pins `review.default_reviewers`.** A list hard-codes which tool is the
   host, so it is correct on the machine that wrote it and silently wrong from any
   other CLI. It also downgrades a missing reviewer from "skipped" to an `info` the

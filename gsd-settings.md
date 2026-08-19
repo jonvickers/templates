@@ -526,7 +526,7 @@ unless a repo-specific note says otherwise.
   // Pin a model per lane; never list default_reviewers (§7.2 — GSD already
   // skips the host tool and reviews with the other three).
   "review":  { "models": { "codex": null, "gemini": null,
-                           "claude": "sonnet", "opencode": "opencode/nemotron-3-ultra-free" } },
+                           "claude": "sonnet", "opencode": "xai/grok-4.6" } },
 
   // build_timeout lives HERE, not under workflow. GSD reads
   // config.graphify.build_timeout straight off the repo's config.json
@@ -782,6 +782,28 @@ These are the ones that bite. Read before touching.
   `agent_overrides` → `routing_tier_defaults` → `default` → manifest, so a block
   that sets `routing_tier_defaults` replaces the shipped tiers wholesale rather
   than adjusting them.
+
+  **It is worse than "wholesale" — the block's mere presence flattens the
+  manifest.** Measured on 2026-08-19 against a `model_profile: quality` repo,
+  changing nothing but the `effort` key:
+
+  | config | `gsd-planner` | `gsd-plan-checker` |
+  |---|---|---|
+  | no `effort` key | `xhigh` | `low` |
+  | `"effort": {}` | **`high`** | `high` |
+  | `"effort": {"agent_overrides": {"gsd-plan-checker": "high"}}` | **`high`** | `high` |
+  | `"effort": {"default": "xhigh", …}` | `xhigh` | `high` |
+
+  An empty object is enough. Once the key exists every agent without an explicit
+  override resolves to `effort.default` (itself defaulting to `high`), so the
+  per-agent tiers GSD shipped stop being consulted at all. There is no surgical
+  `agent_overrides`-only edit: raising one agent silently drops the planner a
+  tier, and restoring the planner with `default: "xhigh"` raises the executor,
+  the verifier, and the code reviewer to `xhigh` along with it.
+
+  This is the reason §7.3 tells you to run a high-effort Grok review by hand
+  rather than configure one — the review lanes take their effort from
+  `gsd-plan-checker`, and there is no way to raise that alone.
 
   **Absent does not mean "inherits your session."** GSD never reads the host
   CLI's effort setting — `effortLevel` appears nowhere in `gsd-core`. Spawned
@@ -1069,11 +1091,41 @@ grounded review runs ~9–10 min and blows any ≤600 s bound.
   up by `--all`, by a bare `--opencode` flag, and by "all detected" like any other
   lane — `reviewer_instances` is only needed to run it as *several* identities.
   Install it with `npm i -g opencode-ai`. It needs no credentials to work: with an
-  empty `auth.json` it falls back to OpenCode's own free hosted models, so pin one
-  in `review.models.opencode` rather than leaving the anonymous default. Add a
-  provider key when you want a stronger third opinion — the free tier is a real
-  reviewer, not a strong one. (Verified end to end on 2026-08-16: installed with
-  zero credentials, read a repo file and reasoned about it correctly.)
+  empty `auth.json` it falls back to OpenCode's own free hosted models, which is a
+  real reviewer but not a strong one. **This is our Grok seat, so give it a Grok.**
+
+  - **Sign in to xAI** (`opencode auth login`), then pin the newest Grok in both
+    places: `"model": "xai/grok-4.6"` in `~/.config/opencode/opencode.json` (what
+    an interactive run and any unpinned lane uses) and
+    `review.models.opencode: "xai/grok-4.6"` in the repo (host-independent, so a
+    teammate's review uses the same model).
+  - **"Newest" is a lookup, not a memory.** Grok ships a new version every few
+    weeks and a pin written once is a silent downgrade a month later — the lane
+    still replies, just from an older model. OpenCode caches the models.dev
+    catalog at `~/.cache/opencode/models.json` with a `release_date` per model;
+    the newest plain `grok-<version>` with `reasoning: true` is the answer. As of
+    2026-08-19 that is `grok-4.6` (released 2026-08-12), ahead of `grok-4.5`
+    (2026-07-08). Ignore the dated snapshots (`grok-4.20-0309-*`, released
+    2026-03-09 despite the higher-looking number), the `grok-imagine-*` image
+    models, and `grok-build-*`. `tools/review-lane-check.js` in the templates repo
+    does this derivation and fails when either pin has drifted.
+  - **The automatic lane runs Grok at LOW reasoning, and that is not fixable in
+    config.** GSD builds the lane as
+    `opencode run --model <pin> --variant <effort> --format json -`, and resolves
+    `<effort>` from one agent — `gsd-plan-checker` — which sits on the light tier
+    at `low`. The only lever is an `effort` block, and adding one costs the
+    planner a tier (§5 has the measurements). Take the low-effort lane as the
+    automatic third opinion, and when you want Grok at full strength, run it
+    yourself against the same prompt:
+
+    ```bash
+    opencode run --model xai/grok-4.6 --variant high --format json - < .planning/.../gsd-review-prompt.md
+    ```
+
+    `--variant` is OpenCode's provider-neutral reasoning-effort flag
+    (`high`, `max`, `minimal`). Verified end to end on 2026-08-19: signed in to
+    xAI, `--model xai/grok-4.6 --variant high` answered with reasoning tokens
+    spent.
 - **Time bounds:** give every lane **≥ 1800 s (30 min)** and run it in the background.
   Capture stderr to a `.err` file — never `2>/dev/null`.
 
