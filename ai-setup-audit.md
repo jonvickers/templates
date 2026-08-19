@@ -626,6 +626,17 @@ node <templates>/tools/gsd-patch-check.js         # every install, exit 1 if a p
 node <templates>/tools/gsd-patch-check.js --fix   # reapply, verify, self-revert if it breaks
 ```
 
+**Do not rely on remembering to run it.** `tools/hooks/review-patch-guard.js` is
+the caller: a Claude Code `PreToolUse` hook on `Bash` that fires only for a
+command reaching `review-lane`, runs the check with `--fix`, and **blocks the
+review** when a patch is missing and cannot be reapplied. Audit it by confirming
+the machine's `~/.claude/settings.json` carries a `PreToolUse` / `Bash` entry
+pointing at that file in the templates clone, and that the path still resolves.
+It is registered by absolute path on purpose — GSD's installer rewrites only hook
+entries whose script basename it manages, so a foreign entry survives an update
+and there is no copy in `~/.claude/hooks/` to be pruned. A guard that is missing,
+or whose path is stale, is a silent regression to the memory-enforced rule above.
+
 It checks **every** config directory rather than the one you happen to be
 driving. `~/.claude/gsd-core` and `~/.codex/gsd-core` are independent installs,
 and the Codex one stayed broken after the Claude one was fixed by hand. It also

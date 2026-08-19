@@ -63,6 +63,17 @@ Not synced anywhere; run them from this clone or copy one into a repo.
   in all repos at once, which is the whole reason this file exists. It reads each
   fix by shape rather than by our marker, so an upstream fix is left alone. Static
   half only — pair it with `review-lane-check.js`.
+- `hooks/review-patch-guard.js` — the caller `gsd-patch-check.js` was missing.
+  "Run the check after every update" was a rule enforced by human memory, which is
+  the same defect as the patch it guards: nothing errors when it is skipped. This
+  runs the check at the one moment it is load-bearing — a Claude Code `PreToolUse`
+  hook on `Bash` that fires only for a command reaching `review-lane`, repairs a
+  reverted patch in place, and **blocks the review** when it cannot. Blocking is
+  the point: a review that cannot run must look like a failure, never like a clean
+  bill of health. It fails open on its own errors and says so. Register it by
+  absolute path into this clone — GSD's installer rewrites only hook entries whose
+  script basename it manages, so a foreign entry survives `/gsd-update`; there is
+  no copy under `~/.claude/hooks/` to drift or be pruned.
 - `gsd-patches/` — the upstream submission for the shim fix: a minimal patch
   against pristine 1.10.0 plus an issue body. Not filed yet.
 - `wave-width-check.js` — turns the wave-topology targets in `gsd-settings.md`

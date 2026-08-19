@@ -1053,11 +1053,13 @@ That makes three-lane convergence a **machine** standard, not a repo setting:
 
   Run it in the repo, not just at `~`: the gemini failure below is repo-scoped.
 
-  On Windows, run `node <templates>/tools/gsd-patch-check.js` after **every** GSD
-  update, before trusting any review. GSD's runner cannot start the reviewer
-  CLIs there without a local patch that each update reverts, and losing it takes
-  out every lane except `claude` — the one lane the host skips
-  (`ai-setup-audit.md` §4.1).
+  On Windows, GSD's runner cannot start the reviewer CLIs at all without a local
+  patch that **every** update reverts, and losing it takes out every lane except
+  `claude` — the one lane the host skips (`ai-setup-audit.md` §4.1). That check is
+  now automatic: `tools/hooks/review-patch-guard.js`, wired as a `PreToolUse` hook
+  on `Bash`, repairs the patch immediately before any review and blocks the review
+  if it cannot. Verify the hook is registered on a new machine; you no longer have
+  to remember to run `node <templates>/tools/gsd-patch-check.js` yourself.
 - **Leave `review.default_reviewers` unset.** A hard-coded list bakes in *which
   tool is the host*: `["codex","gemini","opencode"]` is correct only when you
   launch from Claude Code, and silently wrong from Codex, where the right three
