@@ -519,6 +519,56 @@ function modelChecks(cwd, fix) {
   return out;
 }
 
+/**
+ * Repo-scoped review config that a working lane cannot vouch for.
+ *
+ * A lane that replies proves the CLI is reachable. It says nothing about whether this repo will
+ * ASK for it. `review.default_reviewers` is the setting that decides, and a hard-coded list is
+ * wrong in a way no probe can see: GSD skips whichever tool is hosting the session and reviews
+ * with the others, so `["codex","gemini","opencode"]` is correct only from Claude Code. Run the
+ * same review from Codex and the host-skip removes codex from a list that never contained
+ * `claude` — two reviewers instead of three, reported as a success.
+ *
+ * Found in three repos on this machine at once, which is why it is a check and not a paragraph.
+ * gsd-settings.md §7.2 has the rule; this is its exit code.
+ */
+function repoConfigChecks(cwd) {
+  const planningConfig = path.join(cwd, '.planning', 'config.json');
+  if (!fs.existsSync(planningConfig)) {
+    return [{ check: 'reviewer set', ok: true, reason: 'no .planning/config.json here — not a GSD repo' }];
+  }
+  const cfg = readJsonish(planningConfig) || {};
+  const configured = cfg.review ? cfg.review.default_reviewers : undefined;
+
+  if (configured === undefined || configured === null) {
+    return [{
+      check: 'reviewer set',
+      ok: true,
+      reason: 'review.default_reviewers unset — GSD picks every detected lane but the host (correct)',
+    }];
+  }
+
+  // `reviewer_instances` is the one legitimate reason to set it: instance names are selectable
+  // ONLY through default_reviewers, so a repo using them accepts the host-baking cost knowingly.
+  // Reported rather than failed — it is a deliberate trade, not a mistake.
+  if (cfg.review.reviewer_instances && Object.keys(cfg.review.reviewer_instances).length > 0) {
+    return [{
+      check: 'reviewer set',
+      ok: true,
+      reason: `review.default_reviewers = ${JSON.stringify(configured)}, required by reviewer_instances`,
+      detail: 'instances are selectable only through this list, so it is a deliberate trade — but confirm the list still names the right set from every runtime you launch reviews from, since the host is skipped from it',
+    }];
+  }
+
+  const list = Array.isArray(configured) ? configured : [configured];
+  return [{
+    check: 'reviewer set',
+    ok: false,
+    reason: `review.default_reviewers = ${JSON.stringify(list)} — this bakes in which tool is the host`,
+    detail: 'GSD already skips the host and reviews with the rest, so a fixed list is right from one runtime and short a reviewer from the others. Unset it and pin models per lane instead (gsd-settings.md §7.2).',
+  }];
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
@@ -575,10 +625,22 @@ function main() {
     }
   }
 
-  const failed = [...results, ...models].filter((r) => !r.ok);
+  // Always run: it is a file read, it needs no CLI, and `--models-only` is exactly the invocation
+  // someone uses to check config without paying for probes.
+  const repoConfig = repoConfigChecks(cwd);
+  if (!opts.json) {
+    console.log('');
+    console.log('  repo review config — a lane that replies can still never be asked:');
+    for (const c of repoConfig) {
+      console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} ${c.check.padEnd(18)} ${c.reason}`);
+      if (c.detail) console.log(`       ${c.detail}`);
+    }
+  }
+
+  const failed = [...results, ...models, ...repoConfig].filter((r) => !r.ok);
 
   if (opts.json) {
-    console.log(JSON.stringify({ cwd, in_repo: inRepo, gsd_tools: tools || null, results, models, failed: failed.length }, null, 2));
+    console.log(JSON.stringify({ cwd, in_repo: inRepo, gsd_tools: tools || null, results, models, repo_config: repoConfig, failed: failed.length }, null, 2));
   } else {
     console.log('');
     const laneFails = results.filter((r) => !r.ok);
@@ -603,6 +665,13 @@ function main() {
       console.log(`  ${modelFails.length} model pin problem(s): ${modelFails.map((m) => m.check).join(', ')}.`);
     } else if (models.length) {
       console.log('  opencode is pinned to the newest Grok everywhere it is configured.');
+    }
+    const configFails = repoConfig.filter((c) => !c.ok);
+    if (configFails.length) {
+      console.log(
+        `  ${configFails.length} repo config problem(s): ${configFails.map((c) => c.check).join(', ')}.\n` +
+        '  Working lanes do not help if this repo asks for the wrong set.'
+      );
     }
   }
 

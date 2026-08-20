@@ -1065,7 +1065,10 @@ That makes three-lane convergence a **machine** standard, not a repo setting:
 - **Leave `review.default_reviewers` unset.** A hard-coded list bakes in *which
   tool is the host*: `["codex","gemini","opencode"]` is correct only when you
   launch from Claude Code, and silently wrong from Codex, where the right three
-  include `claude`. Unset adapts; a list cannot.
+  include `claude`. Unset adapts; a list cannot. `review-lane-check.js` fails on a
+  pinned list — three repos on this machine carried one, which is why it is
+  checked rather than merely written down. A repo using `reviewer_instances` is
+  the one exception and is reported, not failed.
 - **Pin a model per lane in `review.models` instead.** That is host-independent,
   and it is the knob that genuinely needs a decision.
 

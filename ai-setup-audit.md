@@ -861,6 +861,14 @@ they actually do.
   instance names are selectable only through `default_reviewers`. Confirm the
   instances exist before treating a list as a finding.
 
+  This sweep predates `review-lane-check.js`'s own `reviewer set` check, and both
+  earn their place: the check fails inside ONE repo, where you feel it; the sweep
+  finds the other eleven, where you do not. The sweep existed here first and
+  found nothing for months because nobody ran it — when it was finally run it hit
+  **three repos at once**, two of them with a list that silently drops to two
+  reviewers when launched from Codex. Prefer the per-repo check for anything that
+  should fail a pipeline, and keep running this one for coverage.
+
 - **Contradictions between files.** If `~/.claude/CLAUDE.md` and
   `~/.codex/AGENTS.md` state different rules for the same thing, the shared
   source has been forked. Report both texts and which file each came from; let

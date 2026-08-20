@@ -49,8 +49,12 @@ Not synced anywhere; run them from this clone or copy one into a repo.
   still reports success — and a stale Grok pin still replies, so it looks like a
   pass. "Newest" is derived from the release dates in opencode's cached models.dev
   catalog, not hard-coded, so it survives the next xAI release; `--fix` rewrites
-  the one file that holds it. **Run it inside a repo** — the gemini failure is
-  repo-scoped. `--tools <path>` probes a specific GSD install.
+  the one file that holds it. It also fails a repo that pins
+  `review.default_reviewers`, which no probe can catch: a working lane says
+  nothing about whether the repo will ask for it, and a fixed list is right from
+  one host and a reviewer short from every other. **Run it inside a repo** — both
+  that check and the gemini failure are repo-scoped. `--tools <path>` probes a
+  specific GSD install.
 - `gsd-patch-check.js` — checks every GSD install on the machine for the local
   runtime patches we carry, and reapplies them with `--fix`. Two today, both the
   same failure in different clothes — a review that did not happen, reported as a
